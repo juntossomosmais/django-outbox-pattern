@@ -1,0 +1,34 @@
+.tox
+.python-version
+
+# IntelliJ project files
+.idea
+
+
+# Build
+dist
+build
+*.egg-info
+
+# Environments
+.venv
+.env
+
+# Mypy
+.mypy_cache
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django
+*.sqlite3
+
+#Mac OS
+.DS_Store
+
+# Coverage
+htmlcov
+.pytest_cache
+.coverage
