@@ -1,0 +1,108 @@
+trigger:
+  - main
+  - develop
+
+pr:
+  - main
+  - develop
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: lint_test
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
+  displayName: Lint and Test project
+  jobs:
+    - job: lint
+      displayName: Check project
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+          pip install pre-commit
+          pre-commit run --all-files
+    - job: test
+      dependsOn: lint
+      condition: succeeded()
+      displayName: Test project
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+           pip install tox=="4.0.0b2"
+           pip install tox-docker=="4.0.0a2"
+           tox -e coverage
+      - publish: $(System.DefaultWorkingDirectory)
+        artifact: drop
+        displayName: 'Send artifact to sonar'
+- stage: sonar
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
+  displayName: Sonar Analyze
+  jobs:
+    - job: sonar
+      displayName: Sonar prepare, analyze an publish
+      steps:
+      - download: current
+        artifact: drop
+        displayName: 'Get artifact from test'
+      - task: SonarCloudPrepare@1
+        displayName: 'Prepare analysis on SonarCloud'
+        inputs:
+          SonarCloud: SonarCloud
+          organization: juntossomosmais
+          scannerMode: CLI
+      - task: SonarCloudAnalyze@1
+        displayName: 'Run Code Analysis'
+      - task: SonarCloudPublish@1
+        displayName: 'Publish Quality Gate Result'
+- stage: publish_and_release
+  displayName: Publish and Release
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+  jobs:
+    - job: publish
+      displayName: Publish on PyPi
+      variables:
+        - group: Python library variables
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+          pip install poetry
+          poetry publish --build -u $(PYPI_JSM_USERNAME) -p $(PYPI_JSM_PASSWORD)
+    - job: release
+      displayName: Release on Github
+      steps:
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.x'
+            addToPath: true
+            architecture: 'x64'
+        - script: |
+            set -e
+            set_variable(){
+                  echo "Set key $1 as $2"
+                  echo "##vso[task.setvariable variable=$1]$2"
+            }
+            pip install poetry
+            VERSION=$(poetry version | awk '{print $2}')
+            set_variable "VERSION" v$VERSION
+        - task: GitHubRelease@1
+          inputs:
+            gitHubConnection: 'github.com'
+            repositoryName: 'juntossomosmais/django-outbox-pattern'
+            action: 'create'
+            target: '$(Build.SourceVersion)'
+            tagSource: 'userSpecifiedTag'
+            tag: '$(VERSION)'
+            changeLogCompareToRelease: 'lastFullRelease'
+            changeLogType: 'commitBased'

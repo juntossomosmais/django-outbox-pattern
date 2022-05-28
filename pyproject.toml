@@ -1,0 +1,72 @@
+[tool.poetry]
+name = "django-outbox-pattern"
+version = "0.1.0"
+description = "A Django app to make it easier to use the transactional outbox pattern"
+license = "MIT"
+authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
+readme = "README.md"
+homepage = "https://github.com/juntossomosmais/django-outbox-pattern"
+repository = "https://github.com/juntossomosmais/django-outbox-pattern"
+documentation = "https://github.com/juntossomosmais/django-outbox-pattern"
+keywords = ["transactional outbox patterns", "application events", "microservices"]
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Environment :: Web Environment',
+    'Framework :: Django :: 3.2',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Topic :: Internet :: WWW/HTTP',
+    'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
+]
+packages = [
+    { include = "django_outbox_pattern" },
+]
+
+[tool.poetry.dependencies]
+python = ">=3.7,<4.0"
+django = ">=3.2"
+"stomp.py" = ">=8.0.1,<9"
+
+[tool.poetry.dev-dependencies]
+tox = "4.0.0b2"
+tox-docker = "4.0.0a2"
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = 'True'
+force_grid_wrap = 0
+force_single_line = true
+use_parentheses = 'True'
+ensure_newline_before_comments = 'True'
+line_length = 120
+
+[tool.pylint.master]
+ignore = []
+
+[tool.pylint.messages_control]
+disable = [
+    "no-member",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "missing-module-docstring",
+    "too-few-public-methods"
+]
+
+[tool.pylint.format]
+max-line-length = "120"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
