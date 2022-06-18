@@ -1,0 +1,66 @@
+
+trigger:
+  - main
+  - develop
+
+pr:
+  - main
+  - develop
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: lint-test
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
+  displayName: Lint and Test project
+  jobs:
+    - job: Lint
+      displayName: Lint check the project
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+          pip install pre-commit
+          pre-commit run --all-files
+    - job: Test
+      dependsOn: Lint
+      condition: succeeded()
+      displayName: Test project
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+           pip install tox
+           tox -e coverage
+      - publish: $(System.DefaultWorkingDirectory)
+        artifact: drop
+        displayName: 'Send artifact to sonar'
+- stage: sonar
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
+  displayName: Sonar Analyze
+  jobs:
+    - job: Sonar
+      displayName: Sonar prepare, analyze an publish
+      steps:
+      - download: current
+        artifact: drop
+        displayName: 'Get artifact from test'
+      - task: SonarCloudPrepare@1
+        displayName: 'Prepare analysis on SonarCloud'
+        inputs:
+          SonarCloud: SonarCloud
+          organization: juntossomosmais
+          scannerMode: CLI
+      - task: SonarCloudAnalyze@1
+        displayName: 'Run Code Analysis'
+      - task: SonarCloudPublish@1
+        displayName: 'Publish Quality Gate Result'
+
+
