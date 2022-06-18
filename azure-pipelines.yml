@@ -37,7 +37,8 @@ stages:
           addToPath: true
           architecture: 'x64'
       - script: |
-           pip install tox
+           pip install tox=="4.0.0b2"
+           pip install tox-docker=="4.0.0a2"
            tox -e coverage
       - publish: $(System.DefaultWorkingDirectory)
         artifact: drop
