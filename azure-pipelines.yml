@@ -11,7 +11,7 @@ pool:
   vmImage: ubuntu-latest
 
 stages:
-- stage: lint-test
+- stage: lint_test
   condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
   displayName: Lint and Test project
   jobs:
