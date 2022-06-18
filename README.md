@@ -3,13 +3,14 @@
 
 Making Transactional Outbox easy
 
+[![Build Status](https://dev.azure.com/juntos-somos-mais-loyalty/python/_apis/build/status/juntossomosmais.django-outbox-pattern?branchName=azure-pipelines)](https://dev.azure.com/juntos-somos-mais-loyalty/python/_build/latest?definitionId=307&branchName=azure-pipelines)
 
 ## Installation
 
 Install django-outbox-pattern with pip
 
 ```bash
-  pip Install django-outbox-pattern
+  pip install django-outbox-pattern
 ```
 
 Add to settings
