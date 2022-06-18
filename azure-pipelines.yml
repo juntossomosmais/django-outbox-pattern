@@ -62,5 +62,3 @@ stages:
         displayName: 'Run Code Analysis'
       - task: SonarCloudPublish@1
         displayName: 'Publish Quality Gate Result'
-
-
