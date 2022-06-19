@@ -4,7 +4,8 @@
 Making Transactional Outbox easy
 
 [![Build Status](https://dev.azure.com/juntos-somos-mais-loyalty/python/_apis/build/status/juntossomosmais.django-outbox-pattern?branchName=azure-pipelines)](https://dev.azure.com/juntos-somos-mais-loyalty/python/_build/latest?definitionId=307&branchName=azure-pipelines)
-
+[![Maintainability Rating](http://https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=sqale_rating)](http://https://sonarcloud.io/dashboard?id=juntossomosmais_django-outbox-pattern)
+[![Coverage](http://https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=coverage)](http://https://sonarcloud.io/dashboard?id=juntossomosmais_django-outbox-pattern)
 ## Installation
 
 Install django-outbox-pattern with pip
