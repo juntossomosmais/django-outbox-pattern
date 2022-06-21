@@ -5,7 +5,7 @@ Django settings for django outbox pattern project.
 
 SECRET_KEY = "django-insecure"
 
-DEBUG = True
+DEBUG = False
 
 INSTALLED_APPS = [
     "django.contrib.auth",
