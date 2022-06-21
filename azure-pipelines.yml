@@ -63,12 +63,14 @@ stages:
         displayName: 'Run Code Analysis'
       - task: SonarCloudPublish@1
         displayName: 'Publish Quality Gate Result'
-- stage: publish
-  displayName: Publish on PyPi
+- stage: publish_and_release
+  displayName: Publish and Release
   condition: ne(variables['Build.Reason'], 'PullRequest')
   jobs:
-    - job: release
-      displayName: Release version
+    - job: publish
+      displayName: Publish on PyPi
+      variables:
+        - group: PyPI credentials
       steps:
       - task: UsePythonVersion@0
         inputs:
@@ -83,15 +85,18 @@ stages:
           }
           pip install poetry
           VERSION=$(poetry version | awk '{print $2}')
-          set_variable "VERSION" v$VERSION  
-      - task: GitHubRelease@1
-        inputs:
-          gitHubConnection: 'github.com'
-          repositoryName: 'juntossomosmais/django-outbox-pattern'
-          action: 'create'
-          target: '$(Build.SourceVersion)'
-          tagSource: 'userSpecifiedTag'
-          tag: '$(VERSION)'
-          changeLogCompareToRelease: 'lastFullRelease'
-          changeLogType: 'commitBased'         
-      
+          set_variable "VERSION" v$VERSION
+          poetry publish --build -u $(PYPI_USERNAME) -p $(PYPI_PASSWORD)
+    - job: release
+      displayName: Release version
+      steps:
+        - task: GitHubRelease@1
+          inputs:
+            gitHubConnection: 'github.com'
+            repositoryName: 'juntossomosmais/django-outbox-pattern'
+            action: 'create'
+            target: '$(Build.SourceVersion)'
+            tagSource: 'userSpecifiedTag'
+            tag: '$(VERSION)'
+            changeLogCompareToRelease: 'lastFullRelease'
+            changeLogType: 'commitBased'
