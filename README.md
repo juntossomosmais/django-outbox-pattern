@@ -27,7 +27,6 @@ Add to settings
 
 INSTALLED_APPS = [
     "django_outbox_pattern",
-
 ]
 
 DJANGO_OUTBOX_PATTERN = {
