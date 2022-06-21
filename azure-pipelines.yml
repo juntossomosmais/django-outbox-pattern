@@ -40,7 +40,7 @@ stages:
            pip install tox-docker=="4.0.0a2"
            tox -e coverage
       - publish: $(System.DefaultWorkingDirectory)
-        artifact: drop
+        artifact: s
         displayName: 'Send artifact to sonar'
 - stage: sonar
   condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
@@ -50,7 +50,7 @@ stages:
       displayName: Sonar prepare, analyze an publish
       steps:
       - download: current
-        artifact: drop
+        artifact: s
         displayName: 'Get artifact from test'
       - task: SonarCloudPrepare@1
         displayName: 'Prepare analysis on SonarCloud'
