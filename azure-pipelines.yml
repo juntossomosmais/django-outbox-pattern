@@ -63,3 +63,34 @@ stages:
         displayName: 'Run Code Analysis'
       - task: SonarCloudPublish@1
         displayName: 'Publish Quality Gate Result'
+- stage: build_publish
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+  jobs:
+    - job: release
+      displayName: Release version
+      steps:
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.x'
+          addToPath: true
+          architecture: 'x64'
+      - script: |
+          set -e
+          set_variable(){
+                echo "Set key $1 as $2"
+                echo "##vso[task.setvariable variable=$1]$2"
+          }
+          pip install poetry
+          VERSION=$(poetry version | awk '{print $2}')
+          set_variable "VERSION" v$VERSION  
+      - task: GitHubRelease@1
+        inputs:
+          gitHubConnection: 'github.com'
+          repositoryName: 'juntossomosmais/django-outbox-pattern'
+          action: 'create'
+          target: '$(Build.SourceVersion)'
+          tagSource: 'userSpecifiedTag'
+          tag: '$(VERSION)'
+          changeLogCompareToRelease: 'lastFullRelease'
+          changeLogType: 'commitBased'         
+      
