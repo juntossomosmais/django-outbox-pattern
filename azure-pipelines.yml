@@ -11,7 +11,6 @@ pool:
 
 stages:
 - stage: lint_test
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
   displayName: Lint and Test project
   jobs:
     - job: lint
@@ -43,7 +42,6 @@ stages:
         artifact: s
         displayName: 'Send artifact to sonar'
 - stage: sonar
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'IndividualCI'))
   displayName: Sonar Analyze
   jobs:
     - job: sonar
