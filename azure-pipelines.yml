@@ -63,7 +63,8 @@ stages:
         displayName: 'Run Code Analysis'
       - task: SonarCloudPublish@1
         displayName: 'Publish Quality Gate Result'
-- stage: build_publish
+- stage: publish
+  displayName: Publish on PyPi
   condition: ne(variables['Build.Reason'], 'PullRequest')
   jobs:
     - job: release
