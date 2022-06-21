@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "django-outbox-pattern"
 version = "0.1.0"
-description = "A Django app to make it easier to use the transactional outbox pattern"
+description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
 readme = "README.md"

@@ -1,5 +1,6 @@
 
 # Django outbox pattern
+
 [![Build Status](https://dev.azure.com/juntos-somos-mais-loyalty/python/_apis/build/status/juntossomosmais.django-outbox-pattern?branchName=azure-pipelines)](https://dev.azure.com/juntos-somos-mais-loyalty/python/_build/latest?definitionId=307&branchName=azure-pipelines)
 [![Maintainability Rating](http://https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=sqale_rating)](http://https://sonarcloud.io/dashboard?id=juntossomosmais_django-outbox-pattern)
 [![Coverage](http://https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=coverage)](http://https://sonarcloud.io/dashboard?id=juntossomosmais_django-outbox-pattern)
@@ -10,14 +11,14 @@
 [![PyPI version](https://badge.fury.io/py/django-outbox-pattern.svg)](https://badge.fury.io/py/django-outbox-pattern)
 [![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/juntossomosmais/django-outbox-pattern/blob/master/LICENSE)
 
-Making Transactional Outbox easy
+A django application to make it easier to use the [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html)
 
 ## Installation
 
 Install django-outbox-pattern with pip
 
 ```bash
-  pip install django-outbox-pattern
+pip install django-outbox-pattern
 ```
 
 Add to settings
@@ -25,17 +26,16 @@ Add to settings
 ```python
     # settings.py
 
-    INSTALLED_APPS = [
-        ...
-        "django_outbox_pattern",
-        ...
-    ]
+INSTALLED_APPS = [
+    "django_outbox_pattern",
 
-    DJANGO_OUTBOX_PATTERN = {
-      "DEFAULT_STOMP_HOST_AND_PORTS": [("127.0.0.1", 61613)],
-      "DEFAULT_STOMP_USERNAME": "guest",
-      "DEFAULT_STOMP_PASSCODE": "guest",
-    }
+]
+
+DJANGO_OUTBOX_PATTERN = {
+  "DEFAULT_STOMP_HOST_AND_PORTS": [("127.0.0.1", 61613)],
+  "DEFAULT_STOMP_USERNAME": "guest",
+  "DEFAULT_STOMP_PASSCODE": "guest",
+}
 
 ```
 
@@ -46,7 +46,7 @@ publish` accepts three parameters, the `destination` which is required,
 fields which the default are all the `fields` of the model and `serializer` which by default adds the id in the message to be sent.
 `fields` and `serializer` are mutually exclusive.
 
-__Only destination__
+_**Only destination**_
 
 ```python
 from django.db import models
@@ -61,11 +61,11 @@ class MyModel(models.Model):
 
 This generates the following data to be sent.
 
-```python
+```text
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One", "field_two": "Field Two"}')
 ```
 
-__With fields__
+_**With fields**_
 
 ```python
 from django.db import models
@@ -80,11 +80,11 @@ class MyModel(models.Model):
 
 This generates the following data to be sent.
 
-```python
+```text
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One"}')
 ```
 
-__With serializer__
+_**With serializer**_
 
 ```python
 from django.db import models
@@ -106,36 +106,95 @@ class MyModel(models.Model):
 
 This generates the following data to be sent.
 
-```python
+```text
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "one": "Field One", "two": "Field Two"}')
 ```
 ## Publish/Subscribe commands
 
+##### Publish command
+
 To send the messages added to the outbox table it is necessary to start the producer.
 
-```python
+```shell
 python manage.py publish
 ```
 
+##### Subscribe command
+
 Django outbox pattern also provides a consumer that can be used to receive outgoing messages.
 
+Create a function that receives an instance of `django_outbox_pattern.payloads.Payload`
 
 ```python
 # callbacks.py
-
-# Create a function that receives an instance of django_outbox_pattern.payloads.Payload
 
 def callback(payload):
     try:
         # Do anything
         payload.ack()
     except Exception:
-        # nack is automatically called in case of errors, but you might want to handle the error in another way
+        # Nack is automatically called in case of errors, but you might want to handle the error in another way
         payload.nack()
 ```
 
-```python
-python manage.py subscribe 'dotted.path.to.callbacks.callback` '/topic/my_route_key.v1'
+```shell
+python manage.py subscribe 'dotted.path.to.callback` 'destination'
 ```
 
 ## Settings
+
+**DEFAULT_CONNECTION_CLASS**
+
+The stomp.py class responsible for connecting to the broker. Default: `stomp.StompConnection12`
+
+**DEFAULT_CONSUMER_LISTENER_CLASS**
+
+The consumer listener class. Default: `django_outbox_pattern.listeners.ConsumerListener`
+
+**DEFAULT_GENERATE_HEADERS**
+
+A function to add headers to the message. Default: `django_outbox_pattern.headers.generate_headers`
+
+**DEFAULT_MAXIMUM_BACKOFF**:
+
+Maximum wait time for connection attempts in seconds. Default: `3600` (1 hour)
+
+**DEFAULT_MAXIMUM_RETRY_ATTEMPTS**
+
+Maximum number of message resend attempts. Default: `50`
+
+**DEFAULT_PAUSE_FOR_RETRY**
+
+Pausing for attempts to resend messages in seconds. Defualt: `240` (4 minutes)
+
+**DEFAULT_WAIT_RETRY**
+
+Time between attempts to send messages after the pause. Default: `60` (1 minute)
+
+**DEFAULT_PRODUCER_LISTENER_CLASS**:
+
+The producer listener class. Default: `django_outbox_pattern.listeners.ProducerListener`
+
+**DEFAULT_STOMP_HOST_AND_PORTS**
+
+List of host and port tuples to try to connect to the broker. Default `[("127.0.0.1", 61613)]`
+
+**DEFAULT_STOMP_QUEUE_HEADERS**
+
+Headers for queues. Default: `{"durable": "true", "auto-delete": "false", "prefetch-count": "1"}`
+
+**DEFAULT_STOMP_HEARTBEATS**
+
+Time tuples for input and output heartbeats. Default:  `(10000, 10000)`
+
+**DEFAULT_STOMP_VHOST**
+
+Virtual host. Default: "/"
+
+**DEFAULT_STOMP_USERNAME**
+
+Username for connection. Default: `"guest"`
+
+**DEFAULT_STOMP_PASSCODE**
+
+Password for connection. Default: `"guest"`
