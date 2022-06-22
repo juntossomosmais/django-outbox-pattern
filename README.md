@@ -23,7 +23,7 @@ pip install django-outbox-pattern
 Add to settings
 
 ```python
-    # settings.py
+# settings.py
 
 INSTALLED_APPS = [
     "django_outbox_pattern",
