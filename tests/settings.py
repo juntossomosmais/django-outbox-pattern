@@ -23,3 +23,7 @@ DATABASES = {
         "NAME": "db.sqlite3",
     }
 }
+
+DJANGO_OUTBOX_PATTERN = {
+    "DEFAULT_STOMP_HOST_AND_PORTS": [("rabbitmq", 61613)],
+}
