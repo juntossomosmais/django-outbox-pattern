@@ -37,7 +37,6 @@ django = ">=3.2"
 
 [tool.poetry.dev-dependencies]
 tox = "4.0.0b2"
-tox-docker = "4.0.0a2"
 
 [tool.black]
 line-length = 120
