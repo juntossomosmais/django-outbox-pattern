@@ -1,5 +1,5 @@
-
 # Django outbox pattern
+
 [![Build Status](https://dev.azure.com/juntos-somos-mais-loyalty/python/_apis/build/status/juntossomosmais.django-outbox-pattern?branchName=main)](https://dev.azure.com/juntos-somos-mais-loyalty/python/_build/latest?definitionId=307&branchName=main)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=juntossomosmais_django-outbox-pattern)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=juntossomosmais_django-outbox-pattern&metric=coverage)](https://sonarcloud.io/summary/new_code?id=juntossomosmais_django-outbox-pattern)
@@ -10,7 +10,8 @@
 [![PyPI version](https://badge.fury.io/py/django-outbox-pattern.svg)](https://badge.fury.io/py/django-outbox-pattern)
 [![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/juntossomosmais/django-outbox-pattern/blob/master/LICENSE)
 
-A django application to make it easier to use the [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html)
+A django application to make it easier to use
+the [transactional outbox pattern](https://microservices.io/patterns/data/transactional-outbox.html)
 
 ## Installation
 
@@ -30,9 +31,9 @@ INSTALLED_APPS = [
 ]
 
 DJANGO_OUTBOX_PATTERN = {
-  "DEFAULT_STOMP_HOST_AND_PORTS": [("127.0.0.1", 61613)],
-  "DEFAULT_STOMP_USERNAME": "guest",
-  "DEFAULT_STOMP_PASSCODE": "guest",
+    "DEFAULT_STOMP_HOST_AND_PORTS": [("127.0.0.1", 61613)],
+    "DEFAULT_STOMP_USERNAME": "guest",
+    "DEFAULT_STOMP_PASSCODE": "guest",
 }
 
 ```
@@ -41,8 +42,10 @@ DJANGO_OUTBOX_PATTERN = {
 
 The `publish` decorator adds the outbox table to the model. `
 publish` accepts three parameters, the `destination` which is required,
-fields which the default are all the `fields` of the model and `serializer` which by default adds the id in the message to be sent.
-`fields` and `serializer` are mutually exclusive.
+fields which the default are all the `fields` of the model and `serializer` which by default adds the id in the message
+to be sent.
+
+> Note: `fields` and `serializer` are mutually exclusive.
 
 _**Only destination**_
 
@@ -51,7 +54,7 @@ from django.db import models
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destination='/topic/my_route_key')
+@publish(destinations='/topic/my_route_key')
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -70,7 +73,7 @@ from django.db import models
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destination='/topic/my_route_key', fields=["field_one"])
+@publish(destinations='/topic/my_route_key', fields=["field_one"])
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -89,7 +92,7 @@ from django.db import models
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destination='/topic/my_route_key', serializer='my_serializer')
+@publish(destinations='/topic/my_route_key', serializers='my_serializer')
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -107,6 +110,40 @@ This generates the following data to be sent.
 ```text
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "one": "Field One", "two": "Field Two"}')
 ```
+
+_**With multi destinations and serializers**_
+
+```python
+from django.db import models
+from django_outbox_pattern.decorators import publish
+
+
+@publish(destinations=['/topic/my_route_key_1', '/topic/my_route_key_2'],
+         serializers=['my_serializer_1', 'my_serializer_2'])
+class MyModel(models.Model):
+    field_one = models.CharField(max_length=100)
+    field_two = models.CharField(max_length=100)
+
+    def my_serializer_1(self):
+        return {
+            "id": self.id,
+            "one": self.field_one,
+        }
+
+    def my_serializer_2(self):
+        return {
+            "id": self.id,
+            "two": self.field_two
+        }
+```
+
+This generates the following data to be sent.
+
+```text
+producer.send(destination='/topic/my_route_key_1.v1', body='{"id": 1, "one": "Field One"}')
+producer.send(destination='/topic/my_route_key_2.v1', body='{"id": 1, "two": "Field Two"}')
+```
+
 ## Publish/Subscribe commands
 
 ##### Publish command
