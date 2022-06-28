@@ -1,5 +1,7 @@
 import json
-from itertools import zip_longest
+from typing import List
+from typing import NamedTuple
+from typing import Optional
 
 from django.core.serializers import serialize
 from django.db import transaction
@@ -7,17 +9,19 @@ from django.db import transaction
 from django_outbox_pattern.models import Published
 
 
-def publish(destinations, fields=None, serializers=None, version="v1"):
-    if not isinstance(destinations, (list, tuple)):
-        destinations = [destinations]
-    if not isinstance(serializers, (list, tuple)):
-        serializers = [serializers]
+class Config(NamedTuple):
+    destination: str
+    fields: Optional[List[str]] = None
+    serializer: Optional[str] = None
+    version: Optional[str] = "v1"
 
+
+def publish(configs: List[Config]):
     def save(self, *args, **kwargs):
         with transaction.atomic():
             super(self.__class__, self).save(*args, **kwargs)
-            for destination, serializer in zip_longest(destinations, serializers):
-                _create_published(destination, fields, self, serializer, version)
+            for config in configs:
+                _create_published(self, *config)
 
     def decorator_publish(cls):
         cls.save = save
@@ -26,13 +30,13 @@ def publish(destinations, fields=None, serializers=None, version="v1"):
     return decorator_publish
 
 
-def _create_published(destination, fields, obj, serializer, version):
-    body = _get_body(fields, obj, serializer)
-    message = Published(version=version, destination=destination, body=body)
-    message.save()
+def _create_published(obj, destination, fields, serializer, version):
+    body = _get_body(obj, fields, serializer)
+    published = Published(body=body, destination=destination, version=version)
+    published.save()
 
 
-def _get_body(fields, obj, serializer):
+def _get_body(obj, fields, serializer):
     if serializer is not None and hasattr(obj, serializer):
         body = getattr(obj, serializer)()
     else:

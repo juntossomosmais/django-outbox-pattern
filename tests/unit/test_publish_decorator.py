@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
+from django_outbox_pattern.decorators import Config
 from django_outbox_pattern.decorators import publish
 from django_outbox_pattern.models import Published
 
@@ -26,7 +27,7 @@ class PublisherDecoratorTestCase(TestCase):
 
     def test_when_is_correct_destination(self):
         destination = "queue"
-        user_publish = publish(destinations=destination)(User)
+        user_publish = publish([Config(destination=destination)])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
         self.assertEqual(published.destination, f"{destination}.v1")
@@ -48,13 +49,13 @@ class PublisherDecoratorTestCase(TestCase):
             "is_superuser": False,
             "user_permissions": [],
         }
-        user_publish = publish(destinations="queue")(User)
+        user_publish = publish([Config(destination="destination")])(User)
         user_publish.objects.create(username="test", date_joined=date_joined)
         published = Published.objects.first()
         self.assertEqual(published.body, fields_expected)
 
     def test_when_has_specified_fields(self):
-        user_publish = publish(destinations="queue", fields=["email", "username"])(User)
+        user_publish = publish([Config(destination="destination", fields=["email", "username"])])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
         self.assertEqual(published.body, self.fields_expected)
@@ -68,7 +69,7 @@ class PublisherDecoratorTestCase(TestCase):
             }
 
         User.my_serializer = my_serializer
-        user_publish = publish(destinations="queue", serializers="my_serializer")(User)
+        user_publish = publish([Config(destination="destination", serializer="my_serializer")])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
         self.assertEqual(published.body, self.fields_expected)
@@ -76,7 +77,12 @@ class PublisherDecoratorTestCase(TestCase):
     def test_when_has_multi_destinations_and_no_serializers(self):
         destination_1 = "queue_1"
         destination_2 = "queue_2"
-        user_publish = publish(destinations=[destination_1, destination_2], fields=["email", "username"])(User)
+        user_publish = publish(
+            [
+                Config(destination=destination_1, fields=["email", "username"]),
+                Config(destination=destination_2, fields=["email", "username"]),
+            ]
+        )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
         self.assert_destination(published, destination_1, destination_2)
@@ -110,7 +116,9 @@ class PublisherDecoratorTestCase(TestCase):
             }
 
         User.my_serializer_1 = my_serializer_1
-        user_publish = publish(destinations=[destination_1, destination_2], serializers="my_serializer_1")(User)
+        user_publish = publish(
+            [Config(destination=destination_1, serializer="my_serializer_1"), Config(destination=destination_2)]
+        )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
         self.assert_destination(published, destination_1, destination_2)
@@ -142,8 +150,10 @@ class PublisherDecoratorTestCase(TestCase):
         User.my_serializer_1 = my_serializer_1
         User.my_serializer_2 = my_serializer_2
         user_publish = publish(
-            destinations=[destination_1, destination_2],
-            serializers=["my_serializer_1", "my_serializer_2"],
+            [
+                Config(destination=destination_1, serializer="my_serializer_1"),
+                Config(destination=destination_2, serializer="my_serializer_2"),
+            ]
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()

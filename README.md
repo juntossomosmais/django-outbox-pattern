@@ -51,10 +51,11 @@ _**Only destination**_
 
 ```python
 from django.db import models
+from django_outbox_pattern.decorators import Config
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destinations='/topic/my_route_key')
+@publish([Config(destination='/topic/my_route_key')])
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -70,10 +71,11 @@ _**With fields**_
 
 ```python
 from django.db import models
+from django_outbox_pattern.decorators import Config
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destinations='/topic/my_route_key', fields=["field_one"])
+@publish([Config(destination='/topic/my_route_key', fields=["field_one"])])
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -89,10 +91,11 @@ _**With serializer**_
 
 ```python
 from django.db import models
+from django_outbox_pattern.decorators import Config
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destinations='/topic/my_route_key', serializers='my_serializer')
+@publish([Config(destination='/topic/my_route_key', serializer='my_serializer')])
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
@@ -115,11 +118,14 @@ _**With multi destinations and serializers**_
 
 ```python
 from django.db import models
+from django_outbox_pattern.decorators import Config
 from django_outbox_pattern.decorators import publish
 
 
-@publish(destinations=['/topic/my_route_key_1', '/topic/my_route_key_2'],
-         serializers=['my_serializer_1', 'my_serializer_2'])
+@publish([
+    Config(destination='/topic/my_route_key_1', serializer="my_serializer_1"),
+    Config(destination='/topic/my_route_key_2', serializer="my_serializer_2"),
+])
 class MyModel(models.Model):
     field_one = models.CharField(max_length=100)
     field_two = models.CharField(max_length=100)
