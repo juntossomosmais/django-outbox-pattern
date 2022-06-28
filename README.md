@@ -41,13 +41,27 @@ DJANGO_OUTBOX_PATTERN = {
 ## Usage/Examples
 
 The `publish` decorator adds the outbox table to the model. `
-publish` accepts three parameters, the `destination` which is required,
-fields which the default are all the `fields` of the model and `serializer` which by default adds the id in the message
-to be sent.
+publish` accepts list of Config. The Config accepts four params the `destination` which is required,
+`fields` which the default are all the fields of the model, `serializer` which by default adds the `id` in the message
+to be sent and `version` which by default is `v1`.
 
-> Note: `fields` and `serializer` are mutually exclusive.
+> Note: `fields` and `serializer` are mutually exclusive, serializer overwrites the fields.
 
-_**Only destination**_
+### The Config typing
+
+```python
+from typing import List
+from typing import NamedTuple
+from typing import Optional
+
+class Config(NamedTuple):
+    destination: str
+    fields: Optional[List[str]] = None
+    serializer: Optional[str] = None
+    version: Optional[str] = "v1"
+```
+
+_**Only destination in config**_
 
 ```python
 from django.db import models
@@ -67,7 +81,7 @@ This generates the following data to be sent.
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One", "field_two": "Field Two"}')
 ```
 
-_**With fields**_
+_**With destinations and fields**_
 
 ```python
 from django.db import models
@@ -87,7 +101,7 @@ This generates the following data to be sent.
 producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One"}')
 ```
 
-_**With serializer**_
+_**With destinations and serializer**_
 
 ```python
 from django.db import models
