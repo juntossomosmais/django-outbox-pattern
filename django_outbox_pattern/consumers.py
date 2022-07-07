@@ -11,6 +11,14 @@ from django_outbox_pattern.settings import settings
 logger = logging.getLogger("django_outbox_pattern")
 
 
+def _get_msg_id(headers):
+    ret = None
+    for key, value in headers.items():
+        if "msg-id" in key:
+            ret = value
+    return ret
+
+
 class Consumer(Base):
     listener_class = settings.DEFAULT_CONSUMER_LISTENER_CLASS
     received_class = settings.DEFAULT_RECEIVED_CLASS
@@ -27,20 +35,23 @@ class Consumer(Base):
     def message_handler(self, body, headers):
         body = json.loads(body)
         payload = Payload(self.connection, body, headers)
-        received = self.received_class()
-        received.body = body
-        received.headers = headers
-        try:
-            self.callback(payload)
-        except Exception as exc:  # pylint: disable=broad-except
-            received.status = StatusChoice.FAILED
-            if self.is_connected():
-                payload.nack()
-            logger.exception(exc)
+        received, created = self.received_class.objects.get_or_create(msg_id=_get_msg_id(headers))
+        if created:
+            received.body = body
+            received.headers = headers
+            try:
+                self.callback(payload)
+            except Exception as exc:  # pylint: disable=broad-except
+                received.status = StatusChoice.FAILED
+                if self.is_connected():
+                    payload.nack()
+                logger.exception(exc)
+            else:
+                received.status = StatusChoice.SUCCEEDED
+            finally:
+                received.save()
         else:
-            received.status = StatusChoice.SUCCEEDED
-        finally:
-            received.save()
+            payload.ack()
 
     def start(self, callback, destination):
         if not self.is_stopped:

@@ -48,6 +48,7 @@ class Received(models.Model):
         editable=False,
         help_text="Id not sequential using UUID Field",
     )
+    msg_id = models.CharField(max_length=100, null=True)
     headers = models.JSONField(null=True)
     body = models.JSONField(null=True)
     added = models.DateTimeField(auto_now_add=True)
