@@ -22,7 +22,7 @@ class BaseListener(ConnectionListener):
 class ConsumerListener(BaseListener):
     def on_disconnected(self):
         logger.info("Consumer disconnected")
-        self.instance.start(self.instance.callback, self.instance.destination)
+        self.instance.start(self.instance.callback, self.instance.destination, self.instance.queue_name)
 
     def on_message(self, frame):
         if self.instance.subscribe_id in frame.headers["subscription"]:
