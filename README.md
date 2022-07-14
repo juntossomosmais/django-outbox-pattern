@@ -38,6 +38,12 @@ DJANGO_OUTBOX_PATTERN = {
 
 ```
 
+Rum migrations
+
+```shell
+python manage.py migrate
+```
+
 ## Usage/Examples
 
 The `publish` decorator adds the outbox table to the model. `
@@ -168,7 +174,7 @@ producer.send(destination='/topic/my_route_key_2.v1', body='{"id": 1, "two": "Fi
 
 ##### Publish command
 
-To send the messages added to the outbox table it is necessary to start the producer.
+To send the messages added to the outbox table it is necessary to start the producer with the following command.
 
 ```shell
 python manage.py publish
@@ -192,9 +198,18 @@ def callback(payload):
         payload.nack()
 ```
 
+To start the consumer, after creating the callback, it is necessary to execute the following command.
+
 ```shell
-python manage.py subscribe 'dotted.path.to.callback` 'destination'
+python manage.py subscribe 'dotted.path.to.callback` 'destination' 'queue_name'
 ```
+The command takes three parameters:
+
+`callback` : the path to the callback function.
+
+`destination` : the destination where messages will be consumed following one of the [stomp](https://www.rabbitmq.com/stomp.html) patterns
+
+`queue_name`(optional): the name of the queue that will be consumed. If not provided, the routing_key of the destination will be used.
 
 ## Settings
 
