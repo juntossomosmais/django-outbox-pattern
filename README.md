@@ -268,3 +268,39 @@ Username for connection. Default: `"guest"`
 **DEFAULT_STOMP_PASSCODE**
 
 Password for connection. Default: `"guest"`
+
+**DEFAULT_STOMP_USE_SSL**
+
+For ssl connections. Default: False
+
+**DEFAULT_STOMP_KEY_FILE**
+
+the path to a X509 key file. Default: None
+
+**DEFAULT_STOMP_CERT_FILE**
+
+the path to a X509 certificate. Default: None
+
+
+**DEFAULT_STOMP_CA_CERTS**
+
+the path to the a file containing CA certificates to validate the server against.
+If this is not set, server side certificate validation is not done. Default: None
+
+**DEFAULT_STOMP_CERT_VALIDATOR**
+
+function which performs extra validation on the client certificate, for example
+checking the returned certificate has a commonName attribute equal to the
+hostname (to avoid man in the middle attacks).
+The signature is: (OK, err_msg) = validation_function(cert, hostname)
+where OK is a boolean, and cert is a certificate structure
+as returned by ssl.SSLSocket.getpeercert(). Default: None
+
+**DEFAULT_STOMP_SSL_VERSION**
+
+SSL protocol to use for the connection. This should be one of the PROTOCOL_x
+constants provided by the ssl module. The default is ssl.PROTOCOL_TLSv1.
+
+**DEFAULT_STOMP_SSL_PASSWORD**
+
+SSL password
