@@ -275,21 +275,21 @@ For ssl connections. Default: False
 
 **DEFAULT_STOMP_KEY_FILE**
 
-the path to a X509 key file. Default: None
+The path to a X509 key file. Default: None
 
 **DEFAULT_STOMP_CERT_FILE**
 
-the path to a X509 certificate. Default: None
+The path to a X509 certificate. Default: None
 
 
 **DEFAULT_STOMP_CA_CERTS**
 
-the path to the a file containing CA certificates to validate the server against.
+The path to the a file containing CA certificates to validate the server against.
 If this is not set, server side certificate validation is not done. Default: None
 
 **DEFAULT_STOMP_CERT_VALIDATOR**
 
-function which performs extra validation on the client certificate, for example
+Function which performs extra validation on the client certificate, for example
 checking the returned certificate has a commonName attribute equal to the
 hostname (to avoid man in the middle attacks).
 The signature is: (OK, err_msg) = validation_function(cert, hostname)
