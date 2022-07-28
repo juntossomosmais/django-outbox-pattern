@@ -49,6 +49,7 @@ class Consumer(Base):
                 logger.exception(exc)
             else:
                 received.status = StatusChoice.SUCCEEDED
+                payload.ack()
             finally:
                 received.save()
         else:
