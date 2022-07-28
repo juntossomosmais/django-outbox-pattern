@@ -5,9 +5,10 @@ from django_outbox_pattern.factories import factory_consumer
 
 
 def get_callback(raise_except=False):
-    def callback(payload):
+    def callback():
         if raise_except:
             raise KeyError("Test exception")
+
     return callback
 
 
