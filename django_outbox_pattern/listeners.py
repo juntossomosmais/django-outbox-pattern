@@ -26,7 +26,7 @@ class ConsumerListener(BaseListener):
 
     def on_message(self, frame):
         if self.instance.subscribe_id in frame.headers["subscription"]:
-            logger.debug("Message id received: %s", frame.headers["message-id"])
+            logger.info("Message id received: %s", frame.headers["message-id"])
             logger.debug("Message body received: %s", frame.body)
             logger.debug("Message headers received: %s", frame.headers)
             self.instance.message_handler(frame.body, frame.headers)
