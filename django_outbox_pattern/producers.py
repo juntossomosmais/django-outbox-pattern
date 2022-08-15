@@ -7,6 +7,7 @@ from stomp.exception import StompException
 from stomp.utils import get_uuid
 
 from django_outbox_pattern.bases import Base
+from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.settings import settings
 
 logger = logging.getLogger("django_outbox_pattern")
@@ -18,7 +19,6 @@ class Producer(Base):
 
     def __init__(self, connection, username, passcode):
         super().__init__(connection, username, passcode)
-        self.attempts = 0
         self.is_stopped = False
         self.set_listener(f"producer-listener-{get_uuid()}", self.listener_class(self))
 
@@ -42,28 +42,28 @@ class Producer(Base):
             "headers": headers,
             **kwargs,
         }
-        self._send_with_retry(kwargs)
+        return self._send_with_retry(**kwargs)
 
-    def _send_with_retry(self, kwargs):
+    def _send_with_retry(self, **kwargs):
         """
         During the message sending process, when the broker crashes or the connection fails or an abnormality occurs,
         will retry the sending. Retry 3 times for the first time, retry every minute after 4 minutes.
         When the total number of retries reaches 50 (DEFAULT_MAXIMUM_RETRY_ATTEMPTS), will stop retrying.
         """
-        while self.attempts < self.settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS:
+
+        attempts = 0
+
+        while attempts < self.settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS:
             try:
                 self.connection.send(**kwargs)
             except StompException:
-                self._wait()
+                attempts += 1
+                if attempts == 3:
+                    sleep(self.settings.DEFAULT_PAUSE_FOR_RETRY)
+                elif attempts > 3:
+                    sleep(self.settings.DEFAULT_WAIT_RETRY)
             else:
-                self.attempts = 0
                 break
-        if self.attempts:
-            raise StompException
-
-    def _wait(self):
-        self.attempts += 1
-        if self.attempts == 3:
-            sleep(self.settings.DEFAULT_PAUSE_FOR_RETRY)
-        elif self.attempts > 3:
-            sleep(self.settings.DEFAULT_WAIT_RETRY)
+        else:
+            raise ExceededSendAttemptsException(attempts)
+        return attempts
