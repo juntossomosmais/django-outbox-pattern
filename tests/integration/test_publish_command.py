@@ -6,8 +6,8 @@ from django.core.management import call_command
 from django.db import DatabaseError
 from django.test import TestCase
 from django.test import override_settings
-from stomp.exception import StompException
 
+from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.management.commands.publish import Command
 from django_outbox_pattern.models import Published
 
@@ -32,8 +32,8 @@ class PublishCommandTest(TestCase):
             self.assertIn("Starting publisher", self.out.getvalue())
 
     @override_settings(DJANGO_OUTBOX_PATTERN={"DEFAULT_RETRY_SEND_ATTEMPTS": 1})
-    def test_command_on_stomp_error(self):
-        with patch.object(Command.producer, "send", side_effect=StompException()):
+    def test_command_on_exceeded_send_attempts(self):
+        with patch.object(Command.producer, "send", side_effect=ExceededSendAttemptsException(1)):
             Published.objects.create(destination="test", body={})
             call_command("publish", stdout=self.out)
             self.assertIn("Message no published with body", self.out.getvalue())
