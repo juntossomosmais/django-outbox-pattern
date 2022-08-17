@@ -1,0 +1,15 @@
+[run]
+omit =
+    .venv/*
+    .tox/*
+    **/migrations/*.py
+    **/admin.py
+    **/__init__.py
+    **/tests.py
+    **/test_*.py
+    **/*_tests.py
+    **/tests/**/*
+    **/tests/*
+
+[report]
+show_missing = True
