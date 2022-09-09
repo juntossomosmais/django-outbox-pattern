@@ -33,6 +33,9 @@ class Base:
     def set_listener(self, name, listener):
         self.connection.set_listener(name, listener)
 
+    def remove_listener(self, name):
+        self.connection.remove_listener(name)
+
     def _disconnect(self):
         self.connection.disconnect()
 
