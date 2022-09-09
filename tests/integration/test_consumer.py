@@ -5,7 +5,7 @@ from django_outbox_pattern.factories import factory_consumer
 
 
 def get_callback(raise_except=False):
-    def callback():
+    def callback(payload):  # pylint: disable=unused-argument
         if raise_except:
             raise KeyError("Test exception")
 
