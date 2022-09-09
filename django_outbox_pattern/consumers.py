@@ -14,7 +14,7 @@ logger = logging.getLogger("django_outbox_pattern")
 def _get_msg_id(headers):
     ret = None
     for key, value in headers.items():
-        if "msg-id" in key:
+        if key.endswith("-id"):
             ret = value
     return ret
 
