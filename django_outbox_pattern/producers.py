@@ -19,17 +19,23 @@ class Producer(Base):
 
     def __init__(self, connection, username, passcode):
         super().__init__(connection, username, passcode)
-        self.is_stopped = False
-        self.set_listener(f"producer-listener-{get_uuid()}", self.listener_class(self))
+        self.listener_name = f"producer-listener-{get_uuid()}"
+        self.set_listener(self.listener_name, self.listener_class(self))
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
     def start(self):
-        if not self.is_stopped:
-            self.connect()
+        self.connect()
 
     def stop(self):
         if self.is_connected():
+            self.remove_listener(self.listener_name)
             self._disconnect()
-            self.is_stopped = True
         else:
             logger.info("Producer not started")
 

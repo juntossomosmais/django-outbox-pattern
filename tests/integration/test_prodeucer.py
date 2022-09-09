@@ -34,3 +34,16 @@ class ProducerTest(TestCase):
         self.assertEqual(listener.connections, 1)
         self.assertEqual(listener.messages, 1)
         self.assertEqual(listener.disconnects, 1)
+
+    def test_producer_send_event_with_context_manager(self):
+        with factory_producer() as producer:
+            producer.set_listener("test_listener", TestListener(print_to_log=True))
+            producer.connection.subscribe(destination="/topic/destination_send_event_context", id=1)
+            listener = producer.get_listener("test_listener")
+            producer.send_event(
+                destination="/topic/destination_send_event_context", body={"message": "Test send event"}
+            )
+            listener.wait_for_message()
+        listener.wait_on_disconnected()
+        self.assertEqual(listener.messages, 1)
+        self.assertEqual(listener.disconnects, 1)

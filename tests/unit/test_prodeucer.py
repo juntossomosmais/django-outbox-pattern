@@ -28,6 +28,12 @@ class ProducerTest(TestCase):
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
 
+    def test_producer_send_event_with_context_manager(self):
+        with patch("django_outbox_pattern.factories.factory_connection"):
+            with factory_producer() as producer:
+                producer.send_event(destination="destination", body={"message": "Test send event"})
+        self.assertEqual(producer.connection.send.call_count, 1)
+
     @override_settings(
         DJANGO_OUTBOX_PATTERN={
             "DEFAULT_WAIT_RETRY": 1,
