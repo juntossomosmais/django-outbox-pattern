@@ -44,6 +44,14 @@ class Producer(Base):
         }
         return self._send_with_retry(**kwargs)
 
+    def send_event(self, body, destination, **kwargs):
+        kwargs = {
+            "body": json.dumps(body, cls=DjangoJSONEncoder),
+            "destination": destination,
+            **kwargs,
+        }
+        return self._send_with_retry(**kwargs)
+
     def _send_with_retry(self, **kwargs):
         """
         During the message sending process, when the broker crashes or the connection fails or an abnormality occurs,

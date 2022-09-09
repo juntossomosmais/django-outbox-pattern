@@ -19,6 +19,13 @@ class ProducerTest(TestCase):
         published = Published.objects.create(destination="destination", body={"message": "Message test"})
         self.producer.start()
         self.producer.send(published)
+        self.producer.stop()
+        self.assertEqual(self.producer.connection.send.call_count, 1)
+
+    def test_producer_send_event(self):
+        self.producer.start()
+        self.producer.send_event(destination="destination", body={"message": "Test send event"})
+        self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
 
     @override_settings(

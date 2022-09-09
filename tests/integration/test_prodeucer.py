@@ -20,3 +20,17 @@ class ProducerTest(TestCase):
         self.assertEqual(listener.connections, 1)
         self.assertEqual(listener.messages, 1)
         self.assertEqual(listener.disconnects, 1)
+
+    def test_producer_send_event(self):
+        producer = factory_producer()
+        producer.set_listener("test_listener", TestListener(print_to_log=True))
+        producer.start()
+        producer.connection.subscribe(destination="/topic/destination_send_event", id=1)
+        listener = producer.get_listener("test_listener")
+        producer.send_event(destination="/topic/destination_send_event", body={"message": "Test send event"})
+        listener.wait_for_message()
+        producer.stop()
+        listener.wait_on_disconnected()
+        self.assertEqual(listener.connections, 1)
+        self.assertEqual(listener.messages, 1)
+        self.assertEqual(listener.disconnects, 1)
