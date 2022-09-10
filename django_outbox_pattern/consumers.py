@@ -14,7 +14,7 @@ logger = logging.getLogger("django_outbox_pattern")
 def _get_msg_id(headers):
     ret = None
     for key, value in headers.items():
-        if "msg-id" in key:
+        if key.endswith("-id"):
             ret = value
     return ret
 
@@ -29,9 +29,9 @@ class Consumer(Base):
         self.callback = lambda p: p
         self.destination = None
         self.queue_name = None
-        self.is_stopped = False
         self.subscribe_id = None
-        self.set_listener(f"consumer-listener-{get_uuid()}", self.listener_class(self))
+        self.listener_name = f"consumer-listener-{get_uuid()}"
+        self.set_listener(self.listener_name, self.listener_class(self))
 
     def message_handler(self, body, headers):
         body = json.loads(body)
@@ -56,20 +56,19 @@ class Consumer(Base):
             payload.ack()
 
     def start(self, callback, destination, queue_name=None):
-        if not self.is_stopped:
-            self.connect()
-            self.callback = callback
-            self.destination = destination
-            self.queue_name = queue_name
-            self._create_dlq_queue(destination, self.subscribe_headers, queue_name)
-            self._create_queue(destination, self.subscribe_headers, queue_name)
-            logger.info("Consumer started with id: %s", self.subscribe_id)
+        self.connect()
+        self.callback = callback
+        self.destination = destination
+        self.queue_name = queue_name
+        self._create_dlq_queue(destination, self.subscribe_headers, queue_name)
+        self._create_queue(destination, self.subscribe_headers, queue_name)
+        logger.info("Consumer started with id: %s", self.subscribe_id)
 
     def stop(self):
         if self.subscribe_id and self.is_connected():
             self._unsubscribe()
+            self.remove_listener(self.listener_name)
             self._disconnect()
-            self.is_stopped = True
         else:
             logger.info("Consumer not started")
 
