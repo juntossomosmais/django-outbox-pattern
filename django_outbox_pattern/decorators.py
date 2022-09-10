@@ -13,7 +13,7 @@ class Config(NamedTuple):
     destination: str
     fields: Optional[List[str]] = None
     serializer: Optional[str] = None
-    version: Optional[str] = "v1"
+    version: Optional[str] = None
 
 
 def publish(configs: List[Config]):
