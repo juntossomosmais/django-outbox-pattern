@@ -103,7 +103,7 @@ class MyModel(models.Model):
 This generates the following data to be sent.
 
 ```text
-Published(destination='/topic/my_route_key', body='{"id": 1, "field_one": "One", "field_two": "Two"}', version="v1")
+Published(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "One", "field_two": "Two"}', version="v1")
 ```
 
 #### With destinations and fields
@@ -199,13 +199,14 @@ To send the messages added to the Published model it is necessary to start the p
 python manage.py publish
 ```
 
-## Publish message directly
+##### Publish message directly
 
 It is possible to send messages directly without using the outbox table
 
 ```python
 # send.py
 from django_outbox_pattern.factories import factory_producer
+
 def send_event(destination, body, headers):
     with factory_producer() as producer:
         producer.send_event(destination=destination, body=body, headers=headers)
