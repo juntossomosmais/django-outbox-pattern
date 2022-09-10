@@ -46,10 +46,9 @@ python manage.py migrate
 
 ## Usage/Examples
 
-The `publish` decorator adds the outbox table to the model. `
-publish` accepts list of Config. The Config accepts four params the `destination` which is required,
+The `publish` decorator adds the [outbox table](https://github.com/juntossomosmais/django-outbox-pattern/blob/main/django_outbox_pattern/models.py#L14) to the model. `publish` accepts list of Config. The Config accepts four params the `destination` which is required,
 `fields` which the default are all the fields of the model, `serializer` which by default adds the `id` in the message
-to be sent and `version` which by default is `v1`.
+to be sent and `version` which by default is empty.
 
 > Note: `fields` and `serializer` are mutually exclusive, serializer overwrites the fields.
 
@@ -64,10 +63,10 @@ class Config(NamedTuple):
     destination: str
     fields: Optional[List[str]] = None
     serializer: Optional[str] = None
-    version: Optional[str] = "v1"
+    version: Optional[str] = None
 ```
 
-_**Only destination in config**_
+#### Only destination in config
 
 ```python
 from django.db import models
@@ -84,10 +83,30 @@ class MyModel(models.Model):
 This generates the following data to be sent.
 
 ```text
-producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One", "field_two": "Field Two"}')
+Published(destination='/topic/my_route_key', body='{"id": 1, "field_one": "Field One", "field_two": "Field Two"}')
 ```
 
-_**With destinations and fields**_
+#### Change destination version in config
+
+```python
+from django.db import models
+from django_outbox_pattern.decorators import Config
+from django_outbox_pattern.decorators import publish
+
+
+@publish([Config(destination='/topic/my_route_key', version="v1")])
+class MyModel(models.Model):
+    field_one = models.CharField(max_length=100)
+    field_two = models.CharField(max_length=100)
+```
+
+This generates the following data to be sent.
+
+```text
+Published(destination='/topic/my_route_key', body='{"id": 1, "field_one": "One", "field_two": "Two"}', version="v1")
+```
+
+#### With destinations and fields
 
 ```python
 from django.db import models
@@ -104,10 +123,10 @@ class MyModel(models.Model):
 This generates the following data to be sent.
 
 ```text
-producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "field_one": "Field One"}')
+Published(destination='/topic/my_route_key', body='{"id": 1, "field_one": "Field One"}')
 ```
 
-_**With destinations and serializer**_
+#### With destinations and serializer
 
 ```python
 from django.db import models
@@ -131,10 +150,10 @@ class MyModel(models.Model):
 This generates the following data to be sent.
 
 ```text
-producer.send(destination='/topic/my_route_key.v1', body='{"id": 1, "one": "Field One", "two": "Field Two"}')
+Published(destination='/topic/my_route_key', body='{"id": 1, "one": "Field One", "two": "Field Two"}')
 ```
 
-_**With multi destinations and serializers**_
+#### With multi destinations and serializers
 
 ```python
 from django.db import models
@@ -166,18 +185,30 @@ class MyModel(models.Model):
 This generates the following data to be sent.
 
 ```text
-producer.send(destination='/topic/my_route_key_1.v1', body='{"id": 1, "one": "Field One"}')
-producer.send(destination='/topic/my_route_key_2.v1', body='{"id": 1, "two": "Field Two"}')
+Published(destination='/topic/my_route_key_1', body='{"id": 1, "one": "Field One"}')
+Published(destination='/topic/my_route_key_2', body='{"id": 1, "two": "Field Two"}')
 ```
 
 ## Publish/Subscribe commands
 
 ##### Publish command
 
-To send the messages added to the outbox table it is necessary to start the producer with the following command.
+To send the messages added to the Published model it is necessary to start the producer with the following command.
 
 ```shell
 python manage.py publish
+```
+
+## Publish message directly
+
+It is possible to send messages directly without using the outbox table
+
+```python
+# send.py
+from django_outbox_pattern.factories import factory_producer
+def send_event(destination, body, headers):
+    with factory_producer() as producer:
+        producer.send_event(destination=destination, body=body, headers=headers)
 ```
 
 ##### Subscribe command

@@ -31,7 +31,9 @@ class Command(BaseCommand):
         self.producer.start()
         while self.running:
             try:
-                published = self.published_class.objects.filter(status=StatusChoice.SCHEDULE)
+                published = self.published_class.objects.filter(
+                    status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
+                )
                 for message in published:
                     try:
                         attempts = self.producer.send(message)

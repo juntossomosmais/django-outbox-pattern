@@ -19,7 +19,7 @@ class Published(models.Model):
         editable=False,
         help_text="Id not sequential using UUID Field",
     )
-    version = models.CharField(max_length=100, default="v1")
+    version = models.CharField(max_length=100, null=True)
     destination = models.CharField(max_length=255)
     body = models.JSONField()
     added = models.DateTimeField(auto_now_add=True)
@@ -35,7 +35,7 @@ class Published(models.Model):
         return f"{self.destination} - {self.body}"
 
     def save(self, *args, **kwargs):
-        if self._state.adding:
+        if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
         super().save(*args, **kwargs)
 

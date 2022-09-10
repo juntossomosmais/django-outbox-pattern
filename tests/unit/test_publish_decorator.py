@@ -18,16 +18,12 @@ class PublisherDecoratorTestCase(TestCase):
             "username": "test",
         }
 
-    def assert_destination(self, published, destination_1, destination_2):
-        self.assertEqual(published[0].destination, f"{destination_1}.v1")
-        self.assertEqual(published[1].destination, f"{destination_2}.v1")
-
     def create_user(self, model):
         model.objects.create(username="test", email=self.email)
 
     def test_when_is_correct_destination(self):
         destination = "queue"
-        user_publish = publish([Config(destination=destination)])(User)
+        user_publish = publish([Config(destination=destination, version="v1")])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
         self.assertEqual(published.destination, f"{destination}.v1")
@@ -85,7 +81,6 @@ class PublisherDecoratorTestCase(TestCase):
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
-        self.assert_destination(published, destination_1, destination_2)
         self.assertEqual(published[0].body, self.fields_expected)
         self.assertEqual(published[1].body, self.fields_expected)
 
@@ -121,7 +116,6 @@ class PublisherDecoratorTestCase(TestCase):
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
-        self.assert_destination(published, destination_1, destination_2)
         self.assertEqual(
             published[0].body,
             {
@@ -157,7 +151,6 @@ class PublisherDecoratorTestCase(TestCase):
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
-        self.assert_destination(published, destination_1, destination_2)
         self.assertEqual(
             published[0].body,
             {
