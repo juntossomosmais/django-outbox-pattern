@@ -1,20 +1,27 @@
 import logging
+import sys
 from datetime import timedelta
+from time import sleep
 
+from django.core.management.base import BaseCommand
 from django.db import DatabaseError
 from django.utils import timezone
 
 from django_outbox_pattern.choices import StatusChoice
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.factories import factory_producer
-from django_outbox_pattern.management.commands.base import Command as BaseCommand
 from django_outbox_pattern.settings import settings
 
 logger = logging.getLogger("django_outbox_pattern")
 
 
+def _waiting():
+    sleep(1)
+
+
 class Command(BaseCommand):
     help = "Publish command"
+    running = True
     producer = factory_producer()
     published_class = settings.DEFAULT_PUBLISHED_CLASS
 
@@ -27,8 +34,13 @@ class Command(BaseCommand):
         except KeyboardInterrupt:
             self._exit()
 
+    def _exit(self):
+        self.stdout.write("\nI'm not waiting for messages anymore 🥲!")
+        sys.exit(0)
+
     def _publish(self):
         self.producer.start()
+        self.stdout.write("Waiting for messages to be published 😋\nQuit with CONTROL-C")
         while self.running:
             try:
                 published = self.published_class.objects.filter(
@@ -50,6 +62,7 @@ class Command(BaseCommand):
                     finally:
                         message.save()
             except DatabaseError:
-                self._waiting("Starting publisher 🤔")
+                self.stdout.write("Starting publisher 🤔\nQuit with CONTROL-C")
+                _waiting()
             else:
-                self._waiting("Waiting for messages to be published 😋")
+                _waiting()
