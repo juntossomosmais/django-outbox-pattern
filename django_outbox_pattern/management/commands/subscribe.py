@@ -1,8 +1,10 @@
+import sys
+
+from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
 from django.utils.module_loading import import_string
 
 from django_outbox_pattern.factories import factory_consumer
-from django_outbox_pattern.management.commands.base import Command as BaseCommand
 
 
 def _import_from_string(value):
@@ -25,7 +27,6 @@ class Command(BaseCommand):
         callback = _import_from_string(options.get("callback"))
         destination = options.get("destination")
         queue_name = options.get("queue_name")
-        print(queue_name)
         consumer = factory_consumer()
         try:
             self._start(consumer, callback, destination, queue_name)
@@ -33,8 +34,10 @@ class Command(BaseCommand):
             consumer.stop()
             self._exit()
 
+    def _exit(self):
+        self.stdout.write("\nI'm not waiting for messages anymore 🥲!")
+        sys.exit(0)
+
     def _start(self, consumer, callback, destination, queue_name):
         consumer.start(callback, destination, queue_name)
-        while self.running and consumer.is_connected():
-            self._waiting("Waiting for messages to be consume 😋")
-        consumer.stop()
+        self.stdout.write("Waiting for messages to be consume 😋")
