@@ -1,5 +1,6 @@
 import json
 import logging
+from json import JSONDecodeError
 
 from stomp.utils import get_uuid
 
@@ -34,7 +35,11 @@ class Consumer(Base):
         self.set_listener(self.listener_name, self.listener_class(self))
 
     def message_handler(self, body, headers):
-        body = json.loads(body)
+        try:
+            body = json.loads(body)
+        except JSONDecodeError as exc:
+            logger.exception(exc)
+
         payload = Payload(self.connection, body, headers)
         received, created = self.received_class.objects.get_or_create(msg_id=_get_msg_id(headers))
         if created:

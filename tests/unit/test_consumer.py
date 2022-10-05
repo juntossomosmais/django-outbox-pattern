@@ -49,3 +49,10 @@ class ConsumerTest(TestCase):
         self.assertEqual(self.consumer.connection.is_connected.call_count, 3)
         self.assertEqual(self.consumer.connection.unsubscribe.call_count, 2)
         self.assertEqual(self.consumer.connection.disconnect.call_count, 1)
+
+    def test_consumer_message_handler_with_invalid_message(self):
+        self.consumer.callback = Mock(side_effect=Exception())
+        body_format_invalid = '{"message": "message with format invalid",}'
+        with self.assertLogs() as captured:
+            self.consumer.message_handler(body_format_invalid, {})
+        self.assertIn("Expecting property name enclosed in double quotes", captured.records[0].getMessage())
