@@ -199,6 +199,24 @@ To send the messages added to the Published model it is necessary to start the p
 python manage.py publish
 ```
 
+##### Publish message via outbox
+
+It is possible to use the outbox pattern with a custom logic before sending the message to the outbox table.
+```python
+from django.db import transaction
+from django_outbox_pattern.models import Published
+
+def custom_business_logic() -> None:
+    
+    # run your custom business logic
+    
+    with transaction.atomic():
+        YourBusinessModel.objects.create()
+        Published.objects.create(destination="your_destination", body={"some": "data"})
+    
+```
+With this you can ensure that the messages can be published in the same database transaction of your business logic.
+
 ##### Publish message directly
 
 It is possible to send messages directly without using the outbox table
