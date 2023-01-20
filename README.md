@@ -207,13 +207,13 @@ from django.db import transaction
 from django_outbox_pattern.models import Published
 
 def custom_business_logic() -> None:
-    
+
     # run your custom business logic
-    
+
     with transaction.atomic():
         YourBusinessModel.objects.create()
         Published.objects.create(destination="your_destination", body={"some": "data"})
-    
+
 ```
 With this you can ensure that the messages can be published in the same database transaction of your business logic.
 
