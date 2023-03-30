@@ -8,9 +8,16 @@ services:
           condition: service_healthy
   rabbitmq:
     image : rabbitmq:3.8-management
-    ports :
-      - "61613:61613"
+#    ports :
+#      - "61613:61613"
     volumes:
        - ./tests/resources/rabbitmq:/etc/rabbitmq/
     healthcheck:
       test: rabbitmq-diagnostics -q ping
+
+  develop:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
