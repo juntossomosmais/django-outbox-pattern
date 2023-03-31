@@ -1,4 +1,5 @@
 import sys
+from time import sleep
 
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
@@ -43,4 +44,5 @@ class Command(BaseCommand):
         consumer.start(callback, destination, queue_name)
         self.stdout.write("Waiting for messages to be consume 😋")
         while self.running and consumer.is_connected():
+            sleep(1)
             continue
