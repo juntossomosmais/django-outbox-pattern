@@ -45,4 +45,3 @@ class Command(BaseCommand):
         self.stdout.write("Waiting for messages to be consume 😋")
         while self.running and consumer.is_connected():
             sleep(1)
-            continue
