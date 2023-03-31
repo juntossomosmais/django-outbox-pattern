@@ -11,7 +11,7 @@ logger = logging.getLogger("django_outbox_pattern")
 
 class Base:
     def __init__(self, connection, username, passcode):
-        self._credentials = dict(username=username, passcode=passcode)
+        self._credentials = dict(username=username, passcode=passcode)  # pylint: disable=R1735
         self.attempts = 0
         self.connection = connection
 

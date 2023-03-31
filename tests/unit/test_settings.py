@@ -8,7 +8,6 @@ from django_outbox_pattern.settings import settings
 
 class SettingsTest(TestCase):
     def test_compatibility_with_override_settings(self):
-
         assert isinstance(
             settings.DEFAULT_GENERATE_HEADERS, types.FunctionType
         ), "Checking a known default should be func"
