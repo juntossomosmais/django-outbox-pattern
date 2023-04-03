@@ -22,7 +22,7 @@ class Published(models.Model):
     version = models.CharField(max_length=100, null=True)
     destination = models.CharField(max_length=255)
     body = models.JSONField()
-    added = models.DateTimeField(auto_now_add=True)
+    added = models.DateTimeField(auto_now_add=True, db_index=True)
     expires_at = models.DateTimeField(default=_one_more_day)
     retry = models.PositiveIntegerField(default=0)
     status = models.IntegerField(choices=StatusChoice.choices, default=StatusChoice.SCHEDULE)
@@ -48,10 +48,10 @@ class Received(models.Model):
         editable=False,
         help_text="Id not sequential using UUID Field",
     )
-    msg_id = models.CharField(max_length=100, null=True)
+    msg_id = models.CharField(max_length=100, null=True, unique=True, db_index=True)
     headers = models.JSONField(null=True)
     body = models.JSONField(null=True)
-    added = models.DateTimeField(auto_now_add=True)
+    added = models.DateTimeField(auto_now_add=True, db_index=True)
     expires_at = models.DateTimeField(default=_one_more_day)
     retry = models.PositiveIntegerField(default=0)
     status = models.IntegerField(choices=StatusChoice.choices, default=StatusChoice.SUCCEEDED)
