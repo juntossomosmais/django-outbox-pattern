@@ -1,7 +1,4 @@
-"""
-Django settings for django outbox pattern project.
-
-"""
+import os
 
 SECRET_KEY = "django-insecure"
 
@@ -13,17 +10,15 @@ INSTALLED_APPS = [
     "django_outbox_pattern",
 ]
 
-ROOT_URLCONF = __name__
-
-urlpatterns = []
-
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": "db.sqlite3",
+        "ENGINE": os.getenv("DB_ENGINE"),
+        "NAME": os.getenv("DB_DATABASE"),
+        "USER": os.environ.get("DB_USER"),
+        "HOST": os.environ.get("DB_HOST"),
+        "PORT": os.environ.get("DB_PORT"),
+        "PASSWORD": os.environ.get("DB_PASSWORD"),
     }
 }
 
-DJANGO_OUTBOX_PATTERN = {
-    "DEFAULT_STOMP_HOST_AND_PORTS": [("rabbitmq", 61613)],
-}
+DJANGO_OUTBOX_PATTERN = {"DEFAULT_STOMP_HOST_AND_PORTS": [("rabbitmq", 61613)]}
