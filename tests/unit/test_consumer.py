@@ -44,7 +44,7 @@ class ConsumerTest(TransactionTestCase):
         def callback(payload: Payload):
             with transaction.atomic():
                 payload.save()
-                raise Exception("mocked")  # pylint: disable=broad-exception-raised
+                raise BaseException("mocked")  # pylint: disable=broad-exception-raised
 
         with self.assertLogs(level="ERROR") as log:
             self.consumer.callback = callback
