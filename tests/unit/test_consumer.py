@@ -21,17 +21,17 @@ class ConsumerTest(TransactionTestCase):
 
     def test_consumer_message_handler_should_save_message_when_save_is_executed_on_callback(self):
         self.consumer.callback = lambda p: p.save()
-        self.consumer.message_handler('{"message": "message test"}', {"message-id": 1})
+        self.consumer.message_handler('{"message": "my message"}', {"message-id": 1})
         self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
         message = self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).first()
-        self.assertEqual({"message": "message test"}, message.body)
+        self.assertEqual({"message": "my message"}, message.body)
         self.assertEqual({"message-id": 1}, message.headers)
         self.assertEqual("1", message.msg_id)
 
     def test_consumer_message_handler_should_print_warning_when_save_or_nack_is_not_executed_on_callback(self):
         self.consumer.callback = lambda p: p
         with self.assertLogs(level="WARNING") as log:
-            self.consumer.message_handler('{"message": "message test"}', {"message-id": 2})
+            self.consumer.message_handler('{"message": "mocked"}', {"message-id": 2})
             self.assertEqual(len(log.output), 1)
             self.assertEqual(len(log.records), 1)
             self.assertIn(
@@ -48,22 +48,22 @@ class ConsumerTest(TransactionTestCase):
 
         with self.assertLogs(level="ERROR") as log:
             self.consumer.callback = callback
-            self.consumer.message_handler('{"message": "message test"}', {"message-id": 1})
+            self.consumer.message_handler('{"message": "mock message"}', {"message-id": 1})
             self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 0)
             self.assertEqual(len(log.output), 1)
             self.assertEqual(len(log.records), 1)
             self.assertIn("mocked", log.output[0])
 
         self.assertEqual(self.consumer.received_class.objects.filter().count(), 0)
-        # assert no broker para garantir que a mensagem foi para dlq
 
     def test_consumer_message_handler_should_discard_duplicated_message(self):
+        message_body = '{"message": "message test"}'
         self.consumer.callback = lambda p: p.save()
-        self.consumer.message_handler('{"message": "message test"}', {"message-id": 1})
+        self.consumer.message_handler(message_body, {"message-id": 1})
         self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
 
         with self.assertLogs(level="INFO") as log:
-            self.consumer.message_handler('{"message": "message test"}', {"message-id": 1})
+            self.consumer.message_handler(message_body, {"message-id": 1})
             self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
             self.assertIn("Message with msg_id: 1 already exists. discarding the message", log.output[0])
 
