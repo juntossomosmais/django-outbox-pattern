@@ -248,8 +248,9 @@ Create a function that receives an instance of `django_outbox_pattern.payloads.P
 ```python
 # callbacks.py
 from django.db import transaction
+from django_outbox_pattern.payloads import Payload
 
-def callback(payload):
+def callback(payload: Payload):
 
     if message_is_invalid(payload.body):
         payload.nack()
