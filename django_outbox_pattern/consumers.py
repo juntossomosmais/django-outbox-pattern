@@ -34,7 +34,6 @@ class Consumer(Base):
         self.set_listener(self.listener_name, self.listener_class(self))
 
     def message_handler(self, body, headers):
-        db.close_old_connections()
         try:
             body = json.loads(body)
         except json.JSONDecodeError as exc:
