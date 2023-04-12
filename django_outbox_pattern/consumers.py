@@ -65,7 +65,7 @@ class Consumer(Base):
                 )
 
         except BaseException as exception:  # pylint: disable=broad-exception-caught
-            logger.exception(exception)
+            logger.exception("An exception has been caught during callback processing flow")
             payload.nack()
 
         finally:
