@@ -58,9 +58,12 @@ class Consumer(Base):
             if payload.saved:
                 payload.ack()
             elif not payload.saved or not payload.nacked:
-                logger.warning(
-                    f"The save or nack command was not executed, and the routine finished running without receiving an acknowledgement or a negative acknowledgement. message-id: {message_id}"  # noqa: E501 pylint: disable=C0301
-                )
+logger.warning(
+    "The save or nack command was not executed, and the routine finished running "
+    "without receiving an acknowledgement or a negative acknowledgement. "
+    "message-id: %s",
+    message_id
+)
         except BaseException as exception:  # pylint: disable=broad-exception-caught
             logger.exception(exception)
             payload.nack()
