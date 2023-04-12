@@ -232,7 +232,7 @@ def send_event(destination, body, headers):
 
 ##### Subscribe command
 
-django-outbox-patterner consumers implement the idempotency pattern using the `message-id`, which is unique in the database. This ensures that the same message won't be processed twice, regardless of any circumstances.
+django-outbox-pattern consumers implement the idempotency pattern using the `message-id`, which is unique in the database. This ensures that the same message won't be processed twice, regardless of any circumstances.
 
 To correctly implement this, you must open a transaction with the database to persist the data from your logic and also execute the `save()` method of the `Payload` object.
 
