@@ -235,9 +235,7 @@ def send_event(destination, body, headers):
 Consumers created through the library implement the idempotency pattern using the header attribute `message-id`. The library configures it as unique in the database. This ensures a given message is only processed once, no matter what.
 To correctly implement this, you must open a transaction with the database to persist the data from your logic and execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the message is removed from the broker.
 
-If you need to discard the message due to a product rule, simply use the `nack()` method of the Payload object. This call will remove the message from the broker.
-
-In the case of `nack`, no persistence is made in the database, and it can be called outside of your transaction. If it fails for any reason, the message will be resent to the consumer.
+If you need to discard the message due to a business rule, use the `nack` method of the Payload object. This call removes the message from the broker. This method performs no persistence in the database and can be called outside your database transaction. If it fails for any reason, the message is resent to the consumer.
 
 **Alert:**
 
