@@ -239,7 +239,7 @@ If you need to discard the message due to a business rule, use the `nack` method
 
 **Alert:**
 
-**You need to use either `save` or `nack` in the processing of your message. The library cannot make this decision for the developer.**
+**You need to use either `save` or `nack` to process of your message. The library cannot make this decision for the developer.**
 
 **The same service (code + database) cannot consume the same message even with different consumers.**
 
