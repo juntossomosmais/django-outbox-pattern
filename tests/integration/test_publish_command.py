@@ -24,6 +24,7 @@ class PublishCommandTest(TestCase):
     def test_command_output_when_message_published(self):
         Published.objects.create(destination="test", body={})
         call_command("publish", stdout=self.out)
+
         self.assertIn("Message published with body", self.out.getvalue())
 
     def test_command_on_database_error(self):

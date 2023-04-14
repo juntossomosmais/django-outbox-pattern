@@ -232,20 +232,34 @@ def send_event(destination, body, headers):
 
 ##### Subscribe command
 
-Django outbox pattern also provides a consumer that can be used to receive outgoing messages.
+Consumers created through the library implement the idempotency pattern using the header attribute `message-id`. The library configures it as unique in the database. This ensures a given message is only processed once, no matter what.
+To correctly implement this, you must open a transaction with the database to persist the data from your logic and execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the message is removed from the broker.
+
+If you need to discard the message due to a business rule, use the `nack` method of the Payload object. This call removes the message from the broker. This method performs no persistence in the database and can be called outside your database transaction. If it fails for any reason, the message is resent to the consumer.
+
+**Alert:**
+
+**You need to use either `save` or `nack` to process of your message. The library cannot make this decision for the developer.**
+
+**The same service (code + database) cannot consume the same message even with different consumers.**
 
 Create a function that receives an instance of `django_outbox_pattern.payloads.Payload`
 
 ```python
 # callbacks.py
+from django.db import transaction
+from django_outbox_pattern.payloads import Payload
 
-def callback(payload):
-    try:
-        # Do anything
-        payload.ack()
-    except Exception:
-        # Nack is automatically called in case of errors, but you might want to handle the error in another way
+def callback(payload: Payload):
+
+    if message_is_invalid(payload.body):
         payload.nack()
+        return
+
+    with transaction.atomic():
+        persist_your_data()
+        payload.save()
+
 ```
 
 To start the consumer, after creating the callback, it is necessary to execute the following command.

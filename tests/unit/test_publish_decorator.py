@@ -29,32 +29,35 @@ class PublisherDecoratorTestCase(TestCase):
         self.assertEqual(published.destination, f"{destination}.v1")
 
     def test_when_no_has_specified_field(self):
+        # arrange
         date_joined = timezone.now()
-        fields_expected = {
-            "id": 1,
-            "email": "",
-            "groups": [],
-            "is_staff": False,
-            "password": "",
-            "username": "test",
-            "is_active": True,
-            "last_name": "",
-            "first_name": "",
-            "last_login": None,
-            "date_joined": date_joined.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
-            "is_superuser": False,
-            "user_permissions": [],
-        }
         user_publish = publish([Config(destination="destination")])(User)
+
+        # act
         user_publish.objects.create(username="test", date_joined=date_joined)
+
+        # assert
         published = Published.objects.first()
-        self.assertEqual(published.body, fields_expected)
+        self.assertEqual("", published.body["email"])
+        self.assertEqual([], published.body["groups"])
+        self.assertFalse(published.body["is_staff"])
+        self.assertEqual("", published.body["password"])
+        self.assertEqual("test", published.body["username"])
+        self.assertTrue(published.body["is_active"])
+        self.assertEqual("", published.body["last_name"])
+        self.assertEqual("", published.body["first_name"])
+        self.assertIsNone(published.body["last_login"])
+        self.assertEqual(date_joined.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], published.body["date_joined"])
+        self.assertFalse(published.body["is_superuser"])
+        self.assertEqual([], published.body["user_permissions"])
 
     def test_when_has_specified_fields(self):
         user_publish = publish([Config(destination="destination", fields=["email", "username"])])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
-        self.assertEqual(published.body, self.fields_expected)
+
+        self.assertEqual(self.fields_expected["email"], published.body["email"])
+        self.assertEqual(self.fields_expected["username"], published.body["username"])
 
     def test_when_has_serializer_method(self):
         def my_serializer(obj):
@@ -68,7 +71,9 @@ class PublisherDecoratorTestCase(TestCase):
         user_publish = publish([Config(destination="destination", serializer="my_serializer")])(User)
         self.create_user(user_publish)
         published = Published.objects.first()
-        self.assertEqual(published.body, self.fields_expected)
+
+        self.assertEqual(self.fields_expected["email"], published.body["email"])
+        self.assertEqual(self.fields_expected["username"], published.body["username"])
 
     def test_when_has_multi_destinations_and_no_serializers(self):
         destination_1 = "queue_1"
@@ -81,28 +86,19 @@ class PublisherDecoratorTestCase(TestCase):
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
-        self.assertEqual(published[0].body, self.fields_expected)
-        self.assertEqual(published[1].body, self.fields_expected)
+
+        self.assertEqual(self.fields_expected["email"], published[0].body["email"])
+        self.assertEqual(self.fields_expected["username"], published[0].body["username"])
+        self.assertEqual("queue_1", published[0].destination)
+
+        self.assertEqual(self.fields_expected["email"], published[1].body["email"])
+        self.assertEqual(self.fields_expected["username"], published[1].body["username"])
+        self.assertEqual("queue_2", published[1].destination)
 
     def test_when_has_multi_destinations_and_one_serializer(self):
         destination_1 = "queue_1"
         destination_2 = "queue_2"
         date_joined = timezone.now()
-        fields_expected = {
-            "id": 1,
-            "email": self.email,
-            "groups": [],
-            "is_staff": False,
-            "password": "",
-            "username": "test",
-            "is_active": True,
-            "last_name": "",
-            "first_name": "",
-            "last_login": None,
-            "date_joined": date_joined.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3],
-            "is_superuser": False,
-            "user_permissions": [],
-        }
 
         def my_serializer_1(obj):
             return {
@@ -116,14 +112,23 @@ class PublisherDecoratorTestCase(TestCase):
         )(User)
         self.create_user(user_publish)
         published = Published.objects.all()
-        self.assertEqual(
-            published[0].body,
-            {
-                "id": 1,
-                "email": self.email,
-            },
-        )
-        self.assertEqual(published[1].body, fields_expected)
+
+        self.assertEqual(self.email, published[0].body["email"])
+        self.assertEqual("queue_1", published[0].destination)
+
+        self.assertEqual(self.email, published[1].body["email"])
+        self.assertEqual([], published[1].body["groups"])
+        self.assertFalse(published[1].body["is_staff"])
+        self.assertEqual("", published[1].body["password"])
+        self.assertEqual("test", published[1].body["username"])
+        self.assertTrue(published[1].body["is_active"])
+        self.assertEqual("", published[1].body["last_name"])
+        self.assertEqual("", published[1].body["first_name"])
+        self.assertIsNone(published[1].body["last_login"])
+        self.assertAlmostEqual(date_joined.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], published[1].body["date_joined"])
+        self.assertFalse(published[1].body["is_superuser"])
+        self.assertEqual([], published[1].body["user_permissions"])
+        self.assertEqual("queue_2", published[1].destination)
 
     def test_when_has_multi_destinations_and_multi_serializers(self):
         destination_1 = "queue_1"

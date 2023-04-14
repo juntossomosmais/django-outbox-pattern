@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-outbox-pattern"
-version = "0.11.3"
+version = "0.12.0"
 description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
@@ -35,8 +35,9 @@ python = ">=3.7,<4.0"
 django = ">=3.2"
 "stomp.py" = ">=8.0.1,<9"
 
-[tool.poetry.dev-dependencies]
-tox = "4.0.0b2"
+[tool.poetry.group.dev.dependencies]
+psycopg2-binary = "^2.9.6"
+coverage = "^7.2.3"
 
 [tool.black]
 line-length = 120
@@ -59,7 +60,10 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "missing-module-docstring",
-    "too-few-public-methods"
+    "too-few-public-methods",
+    "logging-not-lazy",
+    "consider-using-f-string",
+    "logging-fstring-interpolation"
 ]
 
 [tool.pylint.format]

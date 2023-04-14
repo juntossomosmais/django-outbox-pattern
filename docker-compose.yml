@@ -2,10 +2,17 @@ version: "3.9"
 services:
   integration-tests:
     build: .
-    command: [ "tox", "-e", "coverage" ]
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    command: [ "./scripts/tests.sh" ]
     depends_on:
       rabbitmq:
           condition: service_healthy
+      db:
+          condition: service_healthy
+
   rabbitmq:
     image : rabbitmq:3.8-management
     volumes:
@@ -14,8 +21,25 @@ services:
       test: rabbitmq-diagnostics -q ping
 
   develop:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
+    build: .
     volumes:
       - .:/app
+    env_file:
+      - .env
+    depends_on:
+      rabbitmq:
+          condition: service_healthy
+      db:
+          condition: service_healthy
+
+  db:
+    image: postgres:10.1-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

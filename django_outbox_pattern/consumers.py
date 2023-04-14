@@ -1,10 +1,10 @@
 import json
 import logging
 
+from django import db
 from stomp.utils import get_uuid
 
 from django_outbox_pattern.bases import Base
-from django_outbox_pattern.choices import StatusChoice
 from django_outbox_pattern.payloads import Payload
 from django_outbox_pattern.settings import settings
 
@@ -40,24 +40,36 @@ class Consumer(Base):
             logger.exception(exc)
 
         payload = Payload(self.connection, body, headers)
-        received, created = self.received_class.objects.get_or_create(msg_id=_get_msg_id(headers))
-        if created:
-            received.body = body
-            received.headers = headers
-            try:
-                self.callback(payload)
-            except Exception as exc:  # pylint: disable=broad-except
-                received.status = StatusChoice.FAILED
-                if self.is_connected():
-                    payload.nack()
-                logger.exception(exc)
-            else:
-                received.status = StatusChoice.SUCCEEDED
-                payload.ack()
-            finally:
-                received.save()
-        else:
+        message_id = _get_msg_id(headers)
+
+        if self.received_class.objects.filter(msg_id=message_id).exists():
+            db.close_old_connections()
+            logger.info(f"Message with msg_id: {message_id} already exists. discarding the message")
             payload.ack()
+            return
+
+        received = self.received_class(body=body, headers=headers, msg_id=message_id)
+
+        payload.message = received
+
+        try:
+            self.callback(payload)
+            if payload.saved:
+                payload.ack()
+            elif not payload.saved or not payload.nacked:
+                logger.warning(
+                    "The save or nack command was not executed, and the routine finished running "
+                    "without receiving an acknowledgement or a negative acknowledgement. "
+                    "message-id: %s",
+                    message_id,
+                )
+
+        except BaseException:  # pylint: disable=broad-exception-caught
+            logger.exception("An exception has been caught during callback processing flow")
+            payload.nack()
+
+        finally:
+            db.close_old_connections()
 
     def start(self, callback, destination, queue_name=None):
         self.connect()
