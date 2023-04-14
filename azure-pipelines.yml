@@ -19,7 +19,8 @@ resources:
       type: github
       name: juntossomosmais/azure-pipelines-templates
       endpoint: github.com
-      ref: refactor/change-folder-structure
+      ref: main
+      PoetryVersion: 1.4.2
 
 extends:
   template: python/library.yaml@templates
