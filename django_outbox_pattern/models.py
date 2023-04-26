@@ -58,7 +58,7 @@ class Received(models.Model):
 
     @property
     def destination(self):
-        return self.headers.get("destination")
+        return self.headers.get("destination", "") if self.headers else ""
 
     class Meta:
         verbose_name = "received"
