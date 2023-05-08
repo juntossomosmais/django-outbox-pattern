@@ -239,7 +239,7 @@ If you need to discard the message due to a business rule, use the `nack` method
 
 **Alert:**
 
-**You need to use either `save` or `nack` to process of your message. The library cannot make this decision for the developer.**
+**The `save` method should ALWAYS be used when the message has been processed successfully, while the `nack` should be triggered automatically when an exception occurs during processing. Therefore, the developer should ensure that the code is properly handling exceptions so that the `nack` is triggered when necessary, in order to avoid the loss of important messages.**
 
 **The same service (code + database) cannot consume the same message even with different consumers.**
 
