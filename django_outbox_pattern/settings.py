@@ -37,6 +37,10 @@ DEFAULTS = {
     "DEFAULT_STOMP_CERT_VALIDATOR": None,
     "DEFAULT_STOMP_SSL_VERSION": None,
     "DEFAULT_STOMP_SSL_PASSWORD": None,
+    "DAYS_TO_KEEP_DATA": 30,
+    "REMOVE_DATA_CACHE_TTL": 86400,
+    "OUTBOX_PATTERN_PUBLISHER_CACHE_KEY": "remove_old_messages_django_outbox_pattern_publisher",
+    "OUTBOX_PATTERN_CONSUMER_CACHE_KEY": "remove_old_messages_django_outbox_pattern_consumer",
 }
 
 # List of settings that may be in string import notation.

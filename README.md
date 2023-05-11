@@ -368,3 +368,19 @@ constants provided by the ssl module. The default is ssl.PROTOCOL_TLSv1.
 **DEFAULT_STOMP_SSL_PASSWORD**
 
 SSL password
+
+**DAYS_TO_KEEP_DATA**
+
+The total number of days that the system will keep a message in the database history. Default: 30
+
+**REMOVE_DATA_CACHE_TTL**
+
+This variable defines the time-to-live (TTL) value in seconds for the cache used by the `_remove_old_messages` method in the `django_outbox_pattern` application. The cache is used to prevent the method from deleting old data every time it is run, and the TTL value determines how long the cache entry should remain valid before being automatically deleted. It can be customized by setting the REMOVE_DATA_CACHE_TTL variable. Default: 86400 seconds (1 day)
+
+**OUTBOX_PATTERN_PUBLISHER_CACHE_KEY**
+
+The `OUTBOX_PATTERN_PUBLISHER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern publisher. Default: `remove_old_messages_django_outbox_pattern_publisher`.
+
+**OUTBOX_PATTERN_CONSUMER_CACHE_KEY**
+
+The `OUTBOX_PATTERN_CONSUMER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern publisher. Default: `remove_old_messages_django_outbox_pattern_consumer`.
