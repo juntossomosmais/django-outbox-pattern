@@ -1,7 +1,10 @@
 import json
 import logging
+from datetime import timedelta
 
 from django import db
+from django.core.cache import cache
+from django.utils import timezone
 from stomp.utils import get_uuid
 
 from django_outbox_pattern.bases import Base
@@ -69,7 +72,10 @@ class Consumer(Base):
             payload.nack()
 
         finally:
-            db.close_old_connections()
+            try:
+                self._remove_old_messages()
+            finally:
+                db.close_old_connections()
 
     def start(self, callback, destination, queue_name=None):
         self.connect()
@@ -122,3 +128,11 @@ class Consumer(Base):
         self.connection.unsubscribe(self.subscribe_id)
         logger.info("Subscription with id %s canceled", self.subscribe_id)
         self.subscribe_id = None
+
+    def _remove_old_messages(self):
+        if cache.get(settings.OUTBOX_PATTERN_CONSUMER_CACHE_KEY):
+            return
+        days_ago = timezone.now() - timedelta(days=settings.DAYS_TO_KEEP_DATA)
+        self.received_class.objects.filter(added__lt=days_ago).delete()
+
+        cache.set(settings.OUTBOX_PATTERN_CONSUMER_CACHE_KEY, True, settings.REMOVE_DATA_CACHE_TTL)

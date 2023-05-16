@@ -1,8 +1,11 @@
 import json
 import logging
+from datetime import timedelta
 from time import sleep
 
+from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
+from django.utils import timezone
 from stomp.exception import StompException
 from stomp.utils import get_uuid
 
@@ -16,6 +19,7 @@ logger = logging.getLogger("django_outbox_pattern")
 class Producer(Base):
     settings = settings
     listener_class = settings.DEFAULT_PRODUCER_LISTENER_CLASS
+    published_class = settings.DEFAULT_PUBLISHED_CLASS
 
     def __init__(self, connection, username, passcode):
         super().__init__(connection, username, passcode)
@@ -80,4 +84,15 @@ class Producer(Base):
                 break
         else:
             raise ExceededSendAttemptsException(attempts)
+
+        self._remove_old_messages()
         return attempts
+
+    def _remove_old_messages(self):
+        if cache.get(settings.OUTBOX_PATTERN_PUBLISHER_CACHE_KEY):
+            return
+
+        days_ago = timezone.now() - timedelta(days=settings.DAYS_TO_KEEP_DATA)
+        self.published_class.objects.filter(added__lt=days_ago).delete()
+
+        cache.set(settings.OUTBOX_PATTERN_PUBLISHER_CACHE_KEY, True, settings.REMOVE_DATA_CACHE_TTL)
