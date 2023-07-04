@@ -33,7 +33,7 @@ services:
           condition: service_healthy
 
   db:
-    image: postgres:10.1-alpine
+    image: postgres:12-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
