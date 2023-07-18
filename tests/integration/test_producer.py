@@ -7,9 +7,9 @@ from django.core.cache import cache
 from django.test import TestCase
 from stomp.listener import TestListener
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.factories import factory_producer
 from django_outbox_pattern.models import Published
-from django_outbox_pattern.settings import settings
 
 
 class ProducerTest(TestCase):
