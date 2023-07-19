@@ -7,9 +7,9 @@ from django.core.cache import cache
 from django.utils import timezone
 from stomp.utils import get_uuid
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.bases import Base
 from django_outbox_pattern.payloads import Payload
-from django_outbox_pattern.settings import settings
 
 logger = logging.getLogger("django_outbox_pattern")
 

@@ -1,6 +1,6 @@
+from django_outbox_pattern import settings
 from django_outbox_pattern.consumers import Consumer
 from django_outbox_pattern.producers import Producer
-from django_outbox_pattern.settings import settings
 
 USERNAME = settings.DEFAULT_STOMP_USERNAME
 PASSCODE = settings.DEFAULT_STOMP_PASSCODE

@@ -7,10 +7,10 @@ from django.core.management.base import BaseCommand
 from django.db import DatabaseError
 from django.utils import timezone
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.choices import StatusChoice
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.factories import factory_producer
-from django_outbox_pattern.settings import settings
 
 logger = logging.getLogger("django_outbox_pattern")
 

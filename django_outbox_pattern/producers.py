@@ -9,15 +9,14 @@ from django.utils import timezone
 from stomp.exception import StompException
 from stomp.utils import get_uuid
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.bases import Base
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
-from django_outbox_pattern.settings import settings
 
 logger = logging.getLogger("django_outbox_pattern")
 
 
 class Producer(Base):
-    settings = settings
     listener_class = settings.DEFAULT_PRODUCER_LISTENER_CLASS
     published_class = settings.DEFAULT_PUBLISHED_CLASS
 
@@ -44,7 +43,7 @@ class Producer(Base):
             logger.info("Producer not started")
 
     def send(self, message, **kwargs):
-        generate_headers = self.settings.DEFAULT_GENERATE_HEADERS
+        generate_headers = settings.DEFAULT_GENERATE_HEADERS
         headers = generate_headers(message)
         kwargs = {
             "body": json.dumps(message.body, cls=DjangoJSONEncoder),
@@ -71,15 +70,15 @@ class Producer(Base):
 
         attempts = 0
 
-        while attempts < self.settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS:
+        while attempts < settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS:
             try:
                 self.connection.send(**kwargs)
             except StompException:
                 attempts += 1
                 if attempts == 3:
-                    sleep(self.settings.DEFAULT_PAUSE_FOR_RETRY)
+                    sleep(settings.DEFAULT_PAUSE_FOR_RETRY)
                 elif attempts > 3:
-                    sleep(self.settings.DEFAULT_WAIT_RETRY)
+                    sleep(settings.DEFAULT_WAIT_RETRY)
             else:
                 break
         else:

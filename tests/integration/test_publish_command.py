@@ -5,8 +5,8 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.db import DatabaseError
 from django.test import TestCase
-from django.test import override_settings
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.management.commands.publish import Command
 from django_outbox_pattern.models import Published
@@ -32,8 +32,8 @@ class PublishCommandTest(TestCase):
             call_command("publish", stdout=self.out)
             self.assertIn("Starting publisher", self.out.getvalue())
 
-    @override_settings(DJANGO_OUTBOX_PATTERN={"DEFAULT_RETRY_SEND_ATTEMPTS": 1})
     def test_command_on_exceeded_send_attempts(self):
+        settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS = 1
         with patch.object(Command.producer, "send", side_effect=ExceededSendAttemptsException(1)):
             Published.objects.create(destination="test", body={})
             call_command("publish", stdout=self.out)

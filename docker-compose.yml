@@ -12,6 +12,8 @@ services:
           condition: service_healthy
       db:
           condition: service_healthy
+    networks:
+      - djangooutboxpattern
 
   rabbitmq:
     image : rabbitmq:3.8-management
@@ -19,6 +21,8 @@ services:
        - ./tests/resources/rabbitmq:/etc/rabbitmq/
     healthcheck:
       test: rabbitmq-diagnostics -q ping
+    networks:
+      - djangooutboxpattern
 
   develop:
     build: .
@@ -31,6 +35,8 @@ services:
           condition: service_healthy
       db:
           condition: service_healthy
+    networks:
+      - djangooutboxpattern
 
   db:
     image: postgres:12-alpine
@@ -43,3 +49,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - djangooutboxpattern
+
+networks:
+  djangooutboxpattern:
