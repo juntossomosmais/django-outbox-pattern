@@ -1,3 +1,5 @@
+from django.utils.module_loading import import_string
+
 from django_outbox_pattern import settings
 from django_outbox_pattern.consumers import Consumer
 from django_outbox_pattern.producers import Producer
@@ -10,7 +12,7 @@ def factory_connection():
     host_and_ports = settings.DEFAULT_STOMP_HOST_AND_PORTS
     heartbeats = settings.DEFAULT_STOMP_HEARTBEATS
     vhost = settings.DEFAULT_STOMP_VHOST
-    connection_class = settings.DEFAULT_CONNECTION_CLASS
+    connection_class = import_string(settings.DEFAULT_CONNECTION_CLASS)
     connection = connection_class(
         host_and_ports=host_and_ports,
         heartbeats=heartbeats,

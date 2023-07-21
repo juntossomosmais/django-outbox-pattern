@@ -1,30 +1,23 @@
 from django.conf import settings as django_settings
-from django.utils.module_loading import import_string
 
 DJANGO_OUTBOX_PATTERN = getattr(django_settings, "DJANGO_OUTBOX_PATTERN", {})
 
-DEFAULT_CONNECTION_CLASS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_CONNECTION_CLASS", "stomp.StompConnection12")
+DEFAULT_CONNECTION_CLASS = DJANGO_OUTBOX_PATTERN.get("DEFAULT_CONNECTION_CLASS", "stomp.StompConnection12")
+DEFAULT_CONSUMER_LISTENER_CLASS = DJANGO_OUTBOX_PATTERN.get(
+    "DEFAULT_CONSUMER_LISTENER_CLASS", "django_outbox_pattern.listeners.ConsumerListener"
 )
-DEFAULT_CONSUMER_LISTENER_CLASS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_CONSUMER_LISTENER_CLASS", "django_outbox_pattern.listeners.ConsumerListener")
-)
-DEFAULT_GENERATE_HEADERS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_GENERATE_HEADERS", "django_outbox_pattern.headers.generate_headers")
+DEFAULT_GENERATE_HEADERS = DJANGO_OUTBOX_PATTERN.get(
+    "DEFAULT_GENERATE_HEADERS", "django_outbox_pattern.headers.generate_headers"
 )
 DEFAULT_MAXIMUM_BACKOFF = DJANGO_OUTBOX_PATTERN.get("DEFAULT_MAXIMUM_BACKOFF", 3600)
 DEFAULT_MAXIMUM_RETRY_ATTEMPTS = DJANGO_OUTBOX_PATTERN.get("DEFAULT_MAXIMUM_RETRY_ATTEMPTS", 50)
 DEFAULT_PAUSE_FOR_RETRY = DJANGO_OUTBOX_PATTERN.get("DEFAULT_PAUSE_FOR_RETRY", 240)
 DEFAULT_WAIT_RETRY = DJANGO_OUTBOX_PATTERN.get("DEFAULT_WAIT_RETRY", 60)
-DEFAULT_PRODUCER_LISTENER_CLASS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_PRODUCER_LISTENER_CLASS", "django_outbox_pattern.listeners.ProducerListener")
+DEFAULT_PRODUCER_LISTENER_CLASS = DJANGO_OUTBOX_PATTERN.get(
+    "DEFAULT_PRODUCER_LISTENER_CLASS", "django_outbox_pattern.listeners.ProducerListener"
 )
-DEFAULT_PUBLISHED_CLASS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_PUBLISHED_CLASS", "django_outbox_pattern.models.Published")
-)
-DEFAULT_RECEIVED_CLASS = import_string(
-    DJANGO_OUTBOX_PATTERN.get("DEFAULT_RECEIVED_CLASS", "django_outbox_pattern.models.Received")
-)
+DEFAULT_PUBLISHED_CLASS = DJANGO_OUTBOX_PATTERN.get("DEFAULT_PUBLISHED_CLASS", "django_outbox_pattern.models.Published")
+DEFAULT_RECEIVED_CLASS = DJANGO_OUTBOX_PATTERN.get("DEFAULT_RECEIVED_CLASS", "django_outbox_pattern.models.Received")
 DEFAULT_STOMP_HOST_AND_PORTS = DJANGO_OUTBOX_PATTERN.get("DEFAULT_STOMP_HOST_AND_PORTS", [("127.0.0.1", 61613)])
 DEFAULT_STOMP_QUEUE_HEADERS = DJANGO_OUTBOX_PATTERN.get(
     "DEFAULT_STOMP_QUEUE_HEADERS", {"durable": "true", "auto-delete": "false", "prefetch-count": "1"}

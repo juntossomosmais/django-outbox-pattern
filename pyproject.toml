@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-outbox-pattern"
-version = "0.13.1"
+version = "0.13.2"
 description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
@@ -68,6 +68,7 @@ disable = [
 
 [tool.pylint.format]
 max-line-length = "120"
+
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

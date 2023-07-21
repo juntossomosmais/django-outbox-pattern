@@ -1,3 +1,4 @@
+# pylint: disable=R0902
 import json
 import logging
 from datetime import timedelta
@@ -5,6 +6,7 @@ from datetime import timedelta
 from django import db
 from django.core.cache import cache
 from django.utils import timezone
+from django.utils.module_loading import import_string
 from stomp.utils import get_uuid
 
 from django_outbox_pattern import settings
@@ -23,10 +25,6 @@ def _get_msg_id(headers):
 
 
 class Consumer(Base):
-    listener_class = settings.DEFAULT_CONSUMER_LISTENER_CLASS
-    received_class = settings.DEFAULT_RECEIVED_CLASS
-    subscribe_headers = settings.DEFAULT_STOMP_QUEUE_HEADERS
-
     def __init__(self, connection, username, passcode):
         super().__init__(connection, username, passcode)
         self.callback = lambda p: p
@@ -34,6 +32,9 @@ class Consumer(Base):
         self.queue_name = None
         self.subscribe_id = None
         self.listener_name = f"consumer-listener-{get_uuid()}"
+        self.listener_class = import_string(settings.DEFAULT_CONSUMER_LISTENER_CLASS)
+        self.received_class = import_string(settings.DEFAULT_RECEIVED_CLASS)
+        self.subscribe_headers = settings.DEFAULT_STOMP_QUEUE_HEADERS
         self.set_listener(self.listener_name, self.listener_class(self))
 
     def message_handler(self, body, headers):
