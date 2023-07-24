@@ -1,14 +1,11 @@
-import json
 import uuid
 from datetime import timedelta
 
-from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone
-from django.utils.module_loading import import_string
 
-from django_outbox_pattern import settings
 from django_outbox_pattern.choices import StatusChoice
+from django_outbox_pattern.headers import get_message_headers
 
 
 def _one_more_day():
@@ -39,16 +36,10 @@ class Published(models.Model):
     def __str__(self):
         return f"{self.destination} - {self.body}"
 
-    def get_message_headers(self):
-        if len(self.headers.keys()) == 0:
-            generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
-            return json.loads(json.dumps(generate_headers(self), cls=DjangoJSONEncoder))
-        return self.headers
-
     def save(self, *args, **kwargs):
         if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
-            self.headers = self.get_message_headers()
+        self.headers = get_message_headers(self)
 
         super().save(*args, **kwargs)
 
