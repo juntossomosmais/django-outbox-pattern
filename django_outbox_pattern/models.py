@@ -39,12 +39,16 @@ class Published(models.Model):
     def __str__(self):
         return f"{self.destination} - {self.body}"
 
+    def get_message_headers(self):
+        if len(self.headers.keys()) == 0:
+            generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
+            return json.loads(json.dumps(generate_headers(self), cls=DjangoJSONEncoder))
+        return self.headers
+
     def save(self, *args, **kwargs):
         if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
-        if not self.headers:
-            generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
-            self.headers = json.loads(json.dumps(generate_headers(self), cls=DjangoJSONEncoder))
+            self.headers = self.get_message_headers()
 
         super().save(*args, **kwargs)
 
