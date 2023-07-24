@@ -42,7 +42,7 @@ class Published(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
-        if len(self.headers.keys()) == 0:
+        if not self.headers:
             generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
             self.headers = json.loads(json.dumps(generate_headers(self), cls=DjangoJSONEncoder))
 
