@@ -8,7 +8,7 @@ from .models import Received
 
 @admin.register(Published)
 class PublishedAdmin(ModelAdmin):
-    list_display = ("destination", "body", "status", "expired")
+    list_display = ("destination", "body", "header", "status", "expired")
 
     @admin.display(description="can be published?", boolean=True, ordering="expires_at")
     def expired(self, obj):

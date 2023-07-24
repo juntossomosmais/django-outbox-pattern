@@ -21,6 +21,19 @@ class ProducerTest(TestCase):
         self.producer.send(published)
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertTrue(published.headers is not None)
+
+    def test_producer_send_with_header(self):
+        headers = {"key": "value"}
+        published = Published.objects.create(
+            destination="destination", body={"message": "Message test"}, headers=headers
+        )
+        self.producer.start()
+        self.producer.send(published)
+        self.producer.stop()
+        self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertTrue(published.headers is not None)
+        self.assertEqual(published.headers, headers)
 
     def test_producer_send_event(self):
         self.producer.start()

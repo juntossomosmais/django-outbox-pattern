@@ -43,12 +43,10 @@ class Producer(Base):
             logger.info("Producer not started")
 
     def send(self, message, **kwargs):
-        generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
-        headers = generate_headers(message)
         kwargs = {
             "body": json.dumps(message.body, cls=DjangoJSONEncoder),
             "destination": message.destination,
-            "headers": headers,
+            "headers": message.headers,
             **kwargs,
         }
         return self._send_with_retry(**kwargs)

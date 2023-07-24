@@ -1,9 +1,13 @@
+import json
 import uuid
 from datetime import timedelta
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.choices import StatusChoice
 
 
@@ -26,6 +30,7 @@ class Published(models.Model):
     expires_at = models.DateTimeField(default=_one_more_day)
     retry = models.PositiveIntegerField(default=0)
     status = models.IntegerField(choices=StatusChoice.choices, default=StatusChoice.SCHEDULE)
+    headers = models.JSONField(default=dict)
 
     class Meta:
         verbose_name = "published"
@@ -37,6 +42,10 @@ class Published(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
+        if len(self.headers.keys()) == 0:
+            generate_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
+            self.headers = json.loads(json.dumps(generate_headers(self), cls=DjangoJSONEncoder))
+
         super().save(*args, **kwargs)
 
 
