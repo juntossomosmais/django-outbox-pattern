@@ -114,6 +114,7 @@ class Consumer(Base):
             queue_name = f"DLQ.{queue_name}"
         headers.update(
             {
+                "exclusive": settings.DAFAULT_EXCLUSIVE_QUEUE,
                 "x-queue-name": queue_name,
                 "x-dead-letter-routing-key": f"DLQ.DLQ.{queue_name}" if dlq else f"DLQ.{queue_name}",
                 "x-dead-letter-exchange": "",
