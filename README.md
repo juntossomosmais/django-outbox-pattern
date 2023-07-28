@@ -369,6 +369,10 @@ constants provided by the ssl module. The default is ssl.PROTOCOL_TLSv1.
 
 SSL password
 
+**DAFAULT_EXCLUSIVE_QUEUE**
+
+For exclusive queue feature. Default: False
+
 **DAYS_TO_KEEP_DATA**
 
 The total number of days that the system will keep a message in the database history. Default: 30
