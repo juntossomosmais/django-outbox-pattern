@@ -4,7 +4,7 @@ import time
 
 from stomp.exception import StompException
 
-from django_outbox_pattern.settings import settings
+from django_outbox_pattern import settings
 
 logger = logging.getLogger("django_outbox_pattern")
 

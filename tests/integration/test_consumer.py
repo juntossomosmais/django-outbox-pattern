@@ -7,9 +7,9 @@ from django.core.cache import cache
 from django.test import TransactionTestCase
 from stomp.listener import TestListener
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.factories import factory_consumer
 from django_outbox_pattern.models import Received
-from django_outbox_pattern.settings import settings
 
 
 def get_callback(raise_except=False):

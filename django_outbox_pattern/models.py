@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 
 from django_outbox_pattern.choices import StatusChoice
+from django_outbox_pattern.headers import get_message_headers
 
 
 def _one_more_day():
@@ -26,6 +27,7 @@ class Published(models.Model):
     expires_at = models.DateTimeField(default=_one_more_day)
     retry = models.PositiveIntegerField(default=0)
     status = models.IntegerField(choices=StatusChoice.choices, default=StatusChoice.SCHEDULE)
+    headers = models.JSONField(default=dict)
 
     class Meta:
         verbose_name = "published"
@@ -37,6 +39,8 @@ class Published(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding and self.version:
             self.destination = f"{self.destination}.{self.version}"
+        self.headers = get_message_headers(self)
+
         super().save(*args, **kwargs)
 
 

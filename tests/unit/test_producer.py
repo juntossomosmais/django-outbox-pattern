@@ -2,9 +2,9 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 from django.test import TestCase
-from django.test import override_settings
 from stomp.exception import StompException
 
+from django_outbox_pattern import settings
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.factories import factory_producer
 from django_outbox_pattern.models import Published
@@ -21,6 +21,19 @@ class ProducerTest(TestCase):
         self.producer.send(published)
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertTrue(published.headers is not None)
+
+    def test_producer_send_with_header(self):
+        headers = {"key": "value"}
+        published = Published.objects.create(
+            destination="destination", body={"message": "Message test"}, headers=headers
+        )
+        self.producer.start()
+        self.producer.send(published)
+        self.producer.stop()
+        self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertTrue(published.headers is not None)
+        self.assertEqual(published.headers, headers)
 
     def test_producer_send_event(self):
         self.producer.start()
@@ -34,14 +47,10 @@ class ProducerTest(TestCase):
                 producer.send_event(destination="destination", body={"message": "Test send event"})
         self.assertEqual(producer.connection.send.call_count, 1)
 
-    @override_settings(
-        DJANGO_OUTBOX_PATTERN={
-            "DEFAULT_WAIT_RETRY": 1,
-            "DEFAULT_PAUSE_FOR_RETRY": 1,
-            "DEFAULT_MAXIMUM_RETRY_ATTEMPTS": 5,
-        }
-    )
     def test_producer_on_exceeded_send_attempts(self):
+        settings.DEFAULT_WAIT_RETRY = 1
+        settings.DEFAULT_PAUSE_FOR_RETRY = 1
+        settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS = 5
         with patch.object(self.producer.connection, "send", side_effect=StompException()):
             published = Published.objects.create(destination="destination", body={"message": "Message test"})
             self.producer.start()
@@ -49,12 +58,8 @@ class ProducerTest(TestCase):
                 self.producer.send(published)
             self.assertEqual(self.producer.connection.send.call_count, 5)
 
-    @override_settings(
-        DJANGO_OUTBOX_PATTERN={
-            "DEFAULT_MAXIMUM_RETRY_ATTEMPTS": 1,
-        }
-    )
     def test_producer_successful_after_fail(self):
+        settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS = 1
         with patch.object(self.producer.connection, "send", side_effect=StompException()):
             published = Published.objects.create(destination="destination", body={"message": "Message test 1"})
             self.producer.start()
