@@ -17,4 +17,6 @@ class PublishedAdmin(ModelAdmin):
 
 @admin.register(Received)
 class ReceivedAdmin(ModelAdmin):
-    list_display = ("destination", "body", "headers", "status")
+    ordering = ["-added"]
+    list_display = ("destination", "body", "headers", "status", "added")
+    search_fields = ["headers"]
