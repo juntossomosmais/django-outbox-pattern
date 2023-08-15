@@ -20,3 +20,4 @@ class ReceivedAdmin(ModelAdmin):
     ordering = ["-added"]
     list_display = ("destination", "body", "headers", "status", "added")
     search_fields = ["headers"]
+    list_filter = ["added"]
