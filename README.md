@@ -369,7 +369,7 @@ constants provided by the ssl module. The default is ssl.PROTOCOL_TLSv1.
 
 SSL password
 
-**DAFAULT_EXCLUSIVE_QUEUE**
+**DEFAULT_EXCLUSIVE_QUEUE**
 
 For exclusive queue feature. Default: False
 

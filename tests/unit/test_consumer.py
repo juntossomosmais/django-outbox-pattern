@@ -95,3 +95,11 @@ class ConsumerTest(TransactionTestCase):
         with self.assertLogs() as captured:
             self.consumer.message_handler(body_format_invalid, {})
         self.assertIn("Expecting property name enclosed in double quotes", captured.records[0].getMessage())
+
+    def test_consumer_start_with_correct_headers(self):
+        self.consumer.connection.is_connected.side_effect = [False, True]
+        self.consumer.start(lambda p: p, "/topic/destination.v1")
+        self.assertIn("exclusive", self.consumer.subscribe_headers)
+        self.assertIn("x-queue-name", self.consumer.subscribe_headers)
+        self.assertIn("x-dead-letter-routing-key", self.consumer.subscribe_headers)
+        self.assertIn("x-dead-letter-exchange", self.consumer.subscribe_headers)
