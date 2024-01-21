@@ -1,3 +1,4 @@
+# pylint: disable=protected-access
 import json
 from typing import List
 from typing import NamedTuple
@@ -17,17 +18,23 @@ class Config(NamedTuple):
 
 
 def publish(configs: List[Config]):
-    def save(self, *args, **kwargs):
-        with transaction.atomic():
-            super(self.__class__, self).save(*args, **kwargs)
-            for config in configs:
-                _create_published(self, *config)
+    def wrapper(cls):
+        class PublishModel(cls):
+            def save(self, *args, **kwargs):
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                    for config in configs:
+                        _create_published(self, *config)
 
-    def decorator_publish(cls):
-        cls.save = save
-        return cls
+            class Meta(getattr(cls, "Meta", object)):
+                proxy = True
+                app_label = cls._meta.app_label
+                verbose_name = cls._meta.verbose_name
+                verbose_name_plural = cls._meta.verbose_name_plural
 
-    return decorator_publish
+        return PublishModel
+
+    return wrapper
 
 
 def _create_published(obj, destination, fields, serializer, version):
