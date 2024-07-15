@@ -46,7 +46,7 @@ class Command(BaseCommand):
             try:
                 published = self.published_class.objects.filter(
                     status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
-                )
+                ).iterator(chunk_size=int(settings.DEFAULT_PUBLISHED_CHUNK_SIZE))
                 for message in published:
                     try:
                         attempts = self.producer.send(message)
