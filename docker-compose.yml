@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   integration-tests:
     build: .
@@ -16,7 +15,7 @@ services:
       - djangooutboxpattern
 
   rabbitmq:
-    image : rabbitmq:3.8-management
+    image : rabbitmq:3-management
     volumes:
        - ./tests/resources/rabbitmq:/etc/rabbitmq/
     healthcheck:
@@ -39,7 +38,9 @@ services:
       - djangooutboxpattern
 
   db:
-    image: postgres:12-alpine
+    image: postgres:16-alpine
+    ports:
+      - 5432:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -49,6 +50,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - djangooutboxpattern
+
+  lint-formatter:
+    build: .
+    volumes:
+      - .:/app
+    command: [ "./scripts/start-formatter-lint.sh" ]
     networks:
       - djangooutboxpattern
 

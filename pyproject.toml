@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-outbox-pattern"
-version = "1.0.1"
+version = "1.1.0"
 description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
@@ -10,19 +10,17 @@ repository = "https://github.com/juntossomosmais/django-outbox-pattern"
 documentation = "https://github.com/juntossomosmais/django-outbox-pattern"
 keywords = ["transactional outbox patterns", "application events", "microservices"]
 classifiers = [
-    'Development Status :: 4 - Beta',
+    'Development Status :: 5 - Production/Stable',
     'Environment :: Web Environment',
-    'Framework :: Django :: 3.2',
+    'Framework :: Django :: 4.2',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: MIT License',
     'Operating System :: OS Independent',
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3 :: Only',
-    'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',
     'Topic :: Internet :: WWW/HTTP',
     'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
 ]
@@ -31,13 +29,14 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<4.0"
-django = ">=3.2"
+python = ">=3.9,<4.0"
+django = ">=4.2"
 "stomp.py" = ">=8.0.1,<9"
 
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
 coverage = "^7.2.3"
+pre-commit = "^3.7.1"
 
 [tool.black]
 line-length = 120

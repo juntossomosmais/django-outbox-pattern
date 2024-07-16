@@ -388,3 +388,7 @@ The `OUTBOX_PATTERN_PUBLISHER_CACHE_KEY` variable controls the key name of the c
 **OUTBOX_PATTERN_CONSUMER_CACHE_KEY**
 
 The `OUTBOX_PATTERN_CONSUMER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern publisher. Default: `remove_old_messages_django_outbox_pattern_consumer`.
+
+**DEFAULT_PUBLISHED_CHUNK_SIZE**
+
+The `DEFAULT_PUBLISHED_CHUNK_SIZE` variable controls chunk size for the `publish` command in get message to publish action. Default: 200
