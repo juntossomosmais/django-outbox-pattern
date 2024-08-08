@@ -9,17 +9,17 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
   - repo: https://github.com/pycqa/pylint
-    rev: v3.2.5
+    rev: v3.2.6
     hooks:
       - id: pylint
         additional_dependencies: [ django, 'stomp.py' ]
         exclude: migrations
   - repo: https://github.com/pycqa/flake8
-    rev: 7.1.0
+    rev: 7.1.1
     hooks:
       - id: flake8
   - repo: https://github.com/psf/black
-    rev: 24.4.2
+    rev: 24.8.0
     hooks:
       - id: black
         exclude: migrations/
