@@ -1,16 +1,15 @@
-FROM python:3.9-slim
+FROM python:3.10-slim
+
+RUN apt update && apt install -y git && apt clean
 
 WORKDIR /app
 
-# Git is required for pre-commit
-RUN apt update
-RUN apt install -y git
+RUN pip install --upgrade pip && \
+    pip install poetry && \
+    poetry config virtualenvs.create false --local
 
-RUN pip install poetry
+COPY poetry.lock pyproject.toml ./
 
-COPY . .
+RUN poetry install --no-root
 
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-dev --no-root
-
-RUN poetry install --no-root --with dev
+COPY . ./

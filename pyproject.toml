@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-outbox-pattern"
-version = "1.1.0"
+version = "2.0.0"
 description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
@@ -12,12 +12,11 @@ keywords = ["transactional outbox patterns", "application events", "microservice
 classifiers = [
     'Development Status :: 5 - Production/Stable',
     'Environment :: Web Environment',
-    'Framework :: Django :: 4.2',
+    'Framework :: Django :: 5',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: MIT License',
     'Operating System :: OS Independent',
     'Programming Language :: Python',
-    'Programming Language :: Python :: 3.9',
     'Programming Language :: Python :: 3.10',
     'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
@@ -29,18 +28,35 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
-django = ">=4.2"
+python = ">=3.10,<4.0"
+django = ">=5.0.8"
 "stomp.py" = ">=8.0.1,<9"
 
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
-coverage = "^7.2.3"
-pre-commit = "^3.7.1"
+coverage = "*"
+pre-commit = "*"
 
 [tool.black]
 line-length = 120
-
+target_version = ["py310"]
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+)
+'''
 [tool.isort]
 multi_line_output = 3
 include_trailing_comma = 'True'
@@ -62,7 +78,8 @@ disable = [
     "too-few-public-methods",
     "logging-not-lazy",
     "consider-using-f-string",
-    "logging-fstring-interpolation"
+    "logging-fstring-interpolation",
+    "too-many-ancestors"
 ]
 
 [tool.pylint.format]
