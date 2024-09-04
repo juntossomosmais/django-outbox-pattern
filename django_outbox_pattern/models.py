@@ -1,4 +1,5 @@
 import uuid
+
 from datetime import timedelta
 
 from django.contrib.postgres.indexes import BTreeIndex

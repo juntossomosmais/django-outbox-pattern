@@ -1,6 +1,6 @@
-# pylint: disable=R0902
 import json
 import logging
+
 from datetime import timedelta
 
 from django import db
@@ -68,7 +68,7 @@ class Consumer(Base):
                     message_id,
                 )
 
-        except BaseException:  # pylint: disable=broad-exception-caught
+        except Exception:
             logger.exception("An exception has been caught during callback processing flow")
             payload.nack()
 
@@ -107,7 +107,6 @@ class Consumer(Base):
         self._subscribe(destination, self.subscribe_id, headers, queue_name)
 
     def _subscribe(self, destination, subscribe_id, headers, queue_name=None, dlq=False):
-        # pylint: disable=too-many-arguments
         routing_key = destination.split("/")[-1]
         queue_name = queue_name if queue_name else routing_key
         if dlq:

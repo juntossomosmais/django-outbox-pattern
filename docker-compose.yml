@@ -57,7 +57,7 @@ services:
     build: .
     volumes:
       - .:/app
-    command: [ "./scripts/start-formatter-lint.sh" ]
+    command: ["./scripts/start-formatter-lint.sh"]
     networks:
       - djangooutboxpattern
 

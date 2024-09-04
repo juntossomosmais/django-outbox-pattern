@@ -1,0 +1,6 @@
+# https://docs.docker.com/engine/reference/builder/#dockerignore-file
+*
+!django_outbox_pattern
+!scripts
+!pyproject.toml
+!poetry.lock

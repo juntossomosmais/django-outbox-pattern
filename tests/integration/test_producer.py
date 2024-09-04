@@ -1,4 +1,5 @@
 import json
+
 from datetime import datetime
 from datetime import timedelta
 from unittest import mock
@@ -112,10 +113,10 @@ class ProducerTest(TestCase):
     def test_consumer_should_not_remove_old_message_when_cache_exists(self):
         message = self._create_message_in_the_past(31)
         producer = factory_producer()
-        producer._remove_old_messages()  # pylint: disable=W0212
+        producer._remove_old_messages()
         self.assertFalse(Published.objects.filter(id=message.id).exists())
         message1 = self._create_message_in_the_past(31)
-        producer._remove_old_messages()  # pylint: disable=W0212
+        producer._remove_old_messages()
         self.assertTrue(Published.objects.filter(id=message1.id).exists())
 
     @mock.patch("django_outbox_pattern.producers.cache")
@@ -125,7 +126,7 @@ class ProducerTest(TestCase):
             producer.set_listener("test_listener", TestListener(print_to_log=True))
             producer.connection.subscribe(destination=self.fake_destination, id=1)
             listener = producer.get_listener("test_listener")
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(Exception, "Cache get failed"):
                 producer.send_event(destination=self.fake_destination, body={"message": "fake message body"})
 
             listener.wait_for_message()

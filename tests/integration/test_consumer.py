@@ -13,7 +13,7 @@ from django_outbox_pattern.models import Received
 
 
 def get_callback(raise_except=False):
-    def callback(payload):  # pylint: disable=unused-argument
+    def callback(payload):
         if raise_except:
             raise KeyError("Test exception")
         payload.save()
@@ -113,10 +113,10 @@ class ConsumerTest(TransactionTestCase):
 
     def test_consumer_should_not_remove_old_message_when_cache_exists(self):
         self._create_message_in_the_past(35, 1)
-        self.consumer._remove_old_messages()  # pylint: disable=W0212
+        self.consumer._remove_old_messages()
         self.assertFalse(self.consumer.received_class.objects.filter(msg_id=1).exists())
         self._create_message_in_the_past(35, 2)
-        self.consumer._remove_old_messages()  # pylint: disable=W0212
+        self.consumer._remove_old_messages()
         self.assertTrue(self.consumer.received_class.objects.filter(msg_id=2).exists())
 
     def _create_message_in_the_past(self, day_ago, msg_id):
@@ -133,7 +133,7 @@ class ConsumerTest(TransactionTestCase):
         destination = "/topic/consumer.v5"
         callback = get_callback()
         self.consumer.start(callback, destination)
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception):  # noqa
             self.consumer.connection.send(destination=destination, body='{"message": "Message test no raise"}')
             sleep(1)
             self.listener.get_latest_message()
