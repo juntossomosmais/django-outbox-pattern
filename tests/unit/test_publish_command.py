@@ -1,4 +1,3 @@
-# pylint: disable=R0801
 from io import StringIO
 from unittest.mock import MagicMock
 from unittest.mock import PropertyMock

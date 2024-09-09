@@ -44,7 +44,7 @@ class ConsumerTest(TransactionTestCase):
         def callback(payload: Payload):
             with transaction.atomic():
                 payload.save()
-                raise StompException("mocked")  # pylint: disable=broad-exception-raised
+                raise StompException("mocked")
 
         with self.assertLogs(level="ERROR") as log:
             self.consumer.callback = callback

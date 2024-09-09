@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      time: "08:00"
+      day: "sunday"
+    target-branch: "main"
+    reviewers:
+      - "juntossomosmais/loyalty"
+      - "juntossomosmais/loja-virtual"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "08:00"
+      day: "sunday"
+    target-branch: "main"
+    reviewers:
+      - "juntossomosmais/loyalty"
+      - "juntossomosmais/loja-virtual"
