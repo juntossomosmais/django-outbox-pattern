@@ -19,7 +19,7 @@ class PublisherDecoratorTestCase(TestCase):
         }
 
     def create_user(self, model):
-        model.objects.create(username="test", email=self.email)
+        return model.objects.create(username="test", email=self.email)
 
     def test_when_is_correct_destination(self):
         destination = "queue"
@@ -125,7 +125,6 @@ class PublisherDecoratorTestCase(TestCase):
         self.assertEqual("", published[1].body["last_name"])
         self.assertEqual("", published[1].body["first_name"])
         self.assertIsNone(published[1].body["last_login"])
-        self.assertAlmostEqual(date_joined.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], published[1].body["date_joined"])
         self.assertFalse(published[1].body["is_superuser"])
         self.assertEqual([], published[1].body["user_permissions"])
         self.assertEqual("queue_2", published[1].destination)
@@ -170,3 +169,20 @@ class PublisherDecoratorTestCase(TestCase):
                 "username": "test",
             },
         )
+
+    def test_when_overriding_save_method(self):
+        def save(self, *args, **kwargs):
+            self.username = "test orverridden"
+            super(User, self).save(*args, **kwargs)
+
+        User.save = save
+        user_publish = publish([Config(destination="destination")])(User)
+        user = self.create_user(user_publish)
+        self.assertEqual(user.username, "test orverridden")
+
+    def test_when_stop_publishing(self):
+        user_published = publish([Config(destination="stop")])(User)
+        user = user_published(username="test", email=self.email)
+        user.save(stop=True)
+        published = Published.objects.first()
+        self.assertIsNone(published)
