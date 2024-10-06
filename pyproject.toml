@@ -36,7 +36,7 @@ django = ">=5.0.8"
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
 coverage = "*"
-pre-commit = "^3.8.0"
+pre-commit = ">=3.8,<5.0"
 
 [tool.black]
 line-length = 120
