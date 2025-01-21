@@ -1,7 +1,9 @@
 from unittest.mock import Mock
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.test import TestCase
+from request_id_django_log import local_threading
 from stomp.exception import StompException
 
 from django_outbox_pattern import settings
@@ -22,6 +24,17 @@ class ProducerTest(TestCase):
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
         self.assertTrue(published.headers is not None)
+
+    def test_producer_send_should_add_correlation_id_header_from_current_request_id(self):
+        request_id = str(uuid4())
+        local_threading.request_id = request_id
+        published = Published.objects.create(destination="destination", body={"message": "Message test"})
+        self.producer.start()
+        self.producer.send(published)
+        self.producer.stop()
+        self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertIsNotNone(published.headers)
+        self.assertEqual(published.headers["correlation-id"], request_id)
 
     def test_producer_send_with_header(self):
         headers = {"key": "value"}
