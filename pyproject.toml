@@ -32,6 +32,7 @@ packages = [
 python = ">=3.10,<4.0"
 django = ">=5.0.8"
 "stomp.py" = ">=8.0.1,<9"
+request-id-django-log = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
