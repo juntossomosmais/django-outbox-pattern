@@ -29,10 +29,10 @@ class PublishedTest(TransactionTestCase):
         published = Published.objects.create(destination="destination", body={"message": "Message test"})
         self.assertEqual(published.headers["dop-correlation-id"], request_id)
 
-    def test_published_should_not_add_correlation_id_given_custom_header(self):
+    def test_published_should_add_correlation_id_given_custom_header(self):
         request_id = str(uuid4())
         local_threading.request_id = request_id
         published = Published.objects.create(
             destination="destination", body={"message": "Message test"}, headers={"custom": "xpto-lalala"}
         )
-        self.assertNotIn("dop-correlation-id", published.headers)
+        self.assertIn("dop-correlation-id", published.headers)

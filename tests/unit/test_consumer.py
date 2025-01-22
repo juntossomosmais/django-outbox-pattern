@@ -9,7 +9,7 @@ from request_id_django_log import local_threading
 from stomp.exception import StompException
 
 from django_outbox_pattern.choices import StatusChoice
-from django_outbox_pattern.consumers import _get_or_create_correlation_id, Consumer
+from django_outbox_pattern.consumers import _get_or_create_correlation_id
 from django_outbox_pattern.factories import factory_consumer
 from django_outbox_pattern.payloads import Payload
 

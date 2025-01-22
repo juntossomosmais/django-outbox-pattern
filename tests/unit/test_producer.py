@@ -46,7 +46,7 @@ class ProducerTest(TestCase):
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
         self.assertTrue(published.headers is not None)
-        self.assertEqual(published.headers, headers)
+        self.assertEqual(published.headers["key"], headers["key"])
 
     def test_producer_send_event(self):
         self.producer.start()

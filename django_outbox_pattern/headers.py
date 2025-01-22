@@ -26,7 +26,9 @@ def generate_headers(message):
 
 
 def get_message_headers(published):
-    if not published.headers:
-        default_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)
-        return json.loads(json.dumps(default_headers(published), cls=DjangoJSONEncoder))
-    return published.headers
+    default_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)(published)
+    return json.loads(
+        json.dumps(
+            default_headers if not published.headers else published.headers | default_headers, cls=DjangoJSONEncoder
+        )
+    )
