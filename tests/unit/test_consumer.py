@@ -110,19 +110,19 @@ class ConsumerTest(TransactionTestCase):
 
     def test_consumer_message_handler_should_add_correlation_id_from_header_into_local_threading(self):
         self.consumer.callback = lambda p: p.save()
-        self.consumer.message_handler('{"message": "my message"}', {"message-id": 1, "correlation-id": "1234"})
+        self.consumer.message_handler('{"message": "my message"}', {"message-id": 1, "dop-correlation-id": "1234"})
         self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
         message = self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).first()
         self.assertEqual({"message": "my message"}, message.body)
-        self.assertEqual({"message-id": 1, "correlation-id": "1234"}, message.headers)
+        self.assertEqual({"message-id": 1, "dop-correlation-id": "1234"}, message.headers)
         self.assertEqual("1234", message.msg_id)
-        self.assertEqual(local_threading.request_id, message.headers["correlation-id"])
+        self.assertEqual(local_threading.request_id, message.headers["dop-correlation-id"])
 
 
 class GetOrCreateCorrelationIdTest(SimpleTestCase):
 
     def test_should_return_correlation_id_from_headers(self):
-        headers = {"correlation-id": "1234"}
+        headers = {"dop-correlation-id": "1234"}
         with patch("django_outbox_pattern.consumers.uuid4", wraps=uuid4) as uuid4_spy:
             self.assertEqual("1234", _get_or_create_correlation_id(headers))
             uuid4_spy.assert_not_called()

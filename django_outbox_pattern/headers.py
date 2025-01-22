@@ -21,7 +21,7 @@ def generate_headers(message):
         "dop-msg-destination": message.destination,
         "dop-msg-type": message.__class__.__name__,
         "dop-msg-sent-time": timezone.now(),
-        "correlation-id": correlation_id,
+        "dop-correlation-id": correlation_id,
     }
 
 

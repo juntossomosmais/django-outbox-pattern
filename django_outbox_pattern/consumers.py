@@ -27,11 +27,11 @@ def _get_msg_id(headers):
 
 
 def _get_or_create_correlation_id(headers: dict) -> str:
-    if "correlation-id" in headers:
-        return headers["correlation-id"]
+    if "dop-correlation-id" in headers:
+        return headers["dop-correlation-id"]
 
     correlation_id = str(uuid4())
-    logger.debug("A new correlation-id was generated %s", correlation_id)
+    logger.debug("A new dop-correlation-id was generated %s", correlation_id)
     return correlation_id
 
 

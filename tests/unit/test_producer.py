@@ -34,7 +34,7 @@ class ProducerTest(TestCase):
         self.producer.stop()
         self.assertEqual(self.producer.connection.send.call_count, 1)
         self.assertIsNotNone(published.headers)
-        self.assertEqual(published.headers["correlation-id"], request_id)
+        self.assertEqual(published.headers["dop-correlation-id"], request_id)
 
     def test_producer_send_with_header(self):
         headers = {"key": "value"}
