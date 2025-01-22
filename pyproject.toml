@@ -37,7 +37,7 @@ request-id-django-log = "^0.2.0"
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
 coverage = "*"
-pre-commit = "^3.8.0"
+pre-commit = "*"
 
 [tool.black]
 line-length = 120
