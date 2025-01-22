@@ -21,7 +21,7 @@ logger = logging.getLogger("django_outbox_pattern")
 def _get_msg_id(headers):
     ret = None
     for key, value in headers.items():
-        if key.endswith("-id"):
+        if key in ("message-id", "msg-id", "cap-msg-id"):
             ret = value
     return ret
 
@@ -89,6 +89,7 @@ class Consumer(Base):
                 self._remove_old_messages()
             finally:
                 db.close_old_connections()
+            local_threading.request_id = None
 
     def start(self, callback, destination, queue_name=None):
         self.connect()
