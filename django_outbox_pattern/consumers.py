@@ -19,9 +19,18 @@ logger = logging.getLogger("django_outbox_pattern")
 
 
 def _get_msg_id(headers):
+    """
+    Retrieves the first header value that matches either message-id, dop-msg-id or cap-msg-id.
+
+    These values are used to be added as the received message id, so we can track if the message was already received.
+
+    The cap-msg-id is a header that is used by the CAP .NET library, and it's used to identify the message.
+
+    The dop-msg-id is a header that is used by the Django Outbox Pattern library, and it's used to identify the message.
+    """
     ret = None
     for key, value in headers.items():
-        if key in ("message-id", "msg-id", "cap-msg-id"):
+        if key in ("message-id", "dop-msg-id", "cap-msg-id"):
             ret = value
     return ret
 
