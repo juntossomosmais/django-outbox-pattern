@@ -28,11 +28,7 @@ def _get_msg_id(headers):
 
     The dop-msg-id is a header that is used by the Django Outbox Pattern library, and it's used to identify the message.
     """
-    ret = None
-    for key, value in headers.items():
-        if key in ("message-id", "dop-msg-id", "cap-msg-id"):
-            ret = value
-    return ret
+    return headers.get("cap-msg-id") or headers.get("dop-msg-id") or headers.get("message-id")
 
 
 def _get_or_create_correlation_id(headers: dict) -> str:
