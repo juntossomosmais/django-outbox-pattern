@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-outbox-pattern"
-version = "2.1.0"
+version = "3.0.0"
 description = "A django application to make it easier to use the transactional outbox pattern"
 license = "MIT"
 authors = ["Hugo Brilhante <hugobrilhante@gmail.com>"]
@@ -32,11 +32,12 @@ packages = [
 python = ">=3.10,<4.0"
 django = ">=5.0.8"
 "stomp.py" = ">=8.0.1,<9"
+request-id-django-log = "^0.2.0"
 
 [tool.poetry.group.dev.dependencies]
 psycopg2-binary = "^2.9.6"
 coverage = "*"
-pre-commit = "^3.8.0"
+pre-commit = "*"
 
 [tool.black]
 line-length = 120

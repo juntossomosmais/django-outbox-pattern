@@ -47,7 +47,7 @@ class ConsumerTest(TransactionTestCase):
         callback = get_callback()
         destination = "/topic/consumer.v1"
         body = '{"message": "Message twice"}'
-        headers = {"msg-id": "fbb5aaf7-8c0b-453e-a23c-1b8a072a2573"}
+        headers = {"dop-msg-id": "fbb5aaf7-8c0b-453e-a23c-1b8a072a2573"}
         self.consumer.start(callback, destination)
         self.consumer.connection.send(destination=destination, body=body, headers=headers)
         self.consumer.connection.send(destination=destination, body=body, headers=headers)

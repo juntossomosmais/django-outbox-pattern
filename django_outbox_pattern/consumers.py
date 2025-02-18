@@ -2,11 +2,13 @@ import json
 import logging
 
 from datetime import timedelta
+from uuid import uuid4
 
 from django import db
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils.module_loading import import_string
+from request_id_django_log import local_threading
 from stomp.utils import get_uuid
 
 from django_outbox_pattern import settings
@@ -17,11 +19,25 @@ logger = logging.getLogger("django_outbox_pattern")
 
 
 def _get_msg_id(headers):
-    ret = None
-    for key, value in headers.items():
-        if key.endswith("-id"):
-            ret = value
-    return ret
+    """
+    Retrieves the first header value that matches either message-id, dop-msg-id or cap-msg-id.
+
+    These values are used to be added as the received message id, so we can track if the message was already received.
+
+    The cap-msg-id is a header that is used by the CAP .NET library, and it's used to identify the message.
+
+    The dop-msg-id is a header that is used by the Django Outbox Pattern library, and it's used to identify the message.
+    """
+    return headers.get("cap-msg-id") or headers.get("dop-msg-id") or headers.get("message-id")
+
+
+def _get_or_create_correlation_id(headers: dict) -> str:
+    if "dop-correlation-id" in headers:
+        return headers["dop-correlation-id"]
+
+    correlation_id = str(uuid4())
+    logger.debug("A new dop-correlation-id was generated %s", correlation_id)
+    return correlation_id
 
 
 class Consumer(Base):
@@ -38,6 +54,7 @@ class Consumer(Base):
         self.set_listener(self.listener_name, self.listener_class(self))
 
     def message_handler(self, body, headers):
+        local_threading.request_id = _get_or_create_correlation_id(headers)
         try:
             body = json.loads(body)
         except json.JSONDecodeError as exc:
@@ -77,6 +94,7 @@ class Consumer(Base):
                 self._remove_old_messages()
             finally:
                 db.close_old_connections()
+            local_threading.request_id = None
 
     def start(self, callback, destination, queue_name=None):
         self.connect()

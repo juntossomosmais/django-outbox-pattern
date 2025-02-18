@@ -1,11 +1,15 @@
 from unittest.mock import Mock
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.db import transaction
+from django.test import SimpleTestCase
 from django.test import TransactionTestCase
+from request_id_django_log import local_threading
 from stomp.exception import StompException
 
 from django_outbox_pattern.choices import StatusChoice
+from django_outbox_pattern.consumers import _get_or_create_correlation_id
 from django_outbox_pattern.factories import factory_consumer
 from django_outbox_pattern.payloads import Payload
 
@@ -103,3 +107,32 @@ class ConsumerTest(TransactionTestCase):
         self.assertIn("x-queue-name", self.consumer.subscribe_headers)
         self.assertIn("x-dead-letter-routing-key", self.consumer.subscribe_headers)
         self.assertIn("x-dead-letter-exchange", self.consumer.subscribe_headers)
+
+    def test_consumer_message_handler_should_add_correlation_id_from_header_into_local_threading(self):
+        self.consumer.callback = lambda p: p.save()
+
+        self.consumer.message_handler('{"message": "my message"}', {"message-id": 1, "dop-correlation-id": "1234"})
+
+        self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
+        message = self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).first()
+        self.assertEqual({"message": "my message"}, message.body)
+        self.assertEqual({"message-id": 1, "dop-correlation-id": "1234"}, message.headers)
+        self.assertEqual("1", message.msg_id)
+        self.assertIsNone(local_threading.request_id)
+
+
+class GetOrCreateCorrelationIdTest(SimpleTestCase):
+
+    def test_should_return_correlation_id_from_headers(self):
+        headers = {"dop-correlation-id": "1234"}
+        with patch(f"{_get_or_create_correlation_id.__module__}.uuid4", wraps=uuid4) as uuid4_spy:
+            self.assertEqual("1234", _get_or_create_correlation_id(headers))
+            uuid4_spy.assert_not_called()
+
+        self.assertEqual("1234", _get_or_create_correlation_id(headers))
+
+    def test_should_create_a_new_correlation_id_given_header_without_correlation_id(self) -> None:
+        headers: dict = {}
+        with patch(f"{_get_or_create_correlation_id.__module__}.uuid4", wraps=uuid4) as uuid4_spy:
+            self.assertIsNotNone(_get_or_create_correlation_id(headers))
+            uuid4_spy.assert_called_once()
