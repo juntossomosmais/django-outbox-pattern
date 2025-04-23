@@ -2,7 +2,6 @@ import uuid
 
 from datetime import timedelta
 
-from django.contrib.postgres.indexes import BTreeIndex
 from django.db import models
 from django.utils import timezone
 
@@ -35,7 +34,7 @@ class Published(models.Model):
         verbose_name = "published"
         db_table = "published"
         indexes = [
-            BTreeIndex(fields=["status"]),
+            models.Index(fields=["status"]),
         ]
 
     def __str__(self):
