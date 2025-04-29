@@ -21,7 +21,7 @@ class Published(models.Model):
         editable=False,
         help_text="Id not sequential using UUID Field",
     )
-    version = models.CharField(max_length=100, null=True)
+    version = models.CharField(max_length=100, null=True, blank=True)
     destination = models.CharField(max_length=255)
     body = models.JSONField()
     added = models.DateTimeField(auto_now_add=True, db_index=True)
