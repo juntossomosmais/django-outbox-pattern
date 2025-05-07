@@ -34,7 +34,7 @@ class Published(models.Model):
         verbose_name = "published"
         db_table = "published"
         indexes = [
-            models.Index(fields=["status"]),
+            models.Index(fields=["status"], name="published_status_27c9ec_btree"),
         ]
 
     def __str__(self):
