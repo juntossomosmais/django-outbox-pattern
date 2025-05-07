@@ -15,7 +15,7 @@ services:
       - djangooutboxpattern
 
   rabbitmq:
-    image : rabbitmq:3-management
+    image : rabbitmq:4-management
     volumes:
        - ./tests/resources/rabbitmq:/etc/rabbitmq/
     healthcheck:
