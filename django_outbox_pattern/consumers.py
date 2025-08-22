@@ -1,6 +1,7 @@
 import json
 import logging
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import uuid4
 
@@ -51,7 +52,31 @@ class Consumer(Base):
         self.listener_class = import_string(settings.DEFAULT_CONSUMER_LISTENER_CLASS)
         self.received_class = import_string(settings.DEFAULT_RECEIVED_CLASS)
         self.subscribe_headers = settings.DEFAULT_STOMP_QUEUE_HEADERS
+
+        # Background processing controls
+        self._should_process_msg_on_background = settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND
+        self._pool_executor = self._create_new_worker_executor()
         self.set_listener(self.listener_name, self.listener_class(self))
+
+    def _create_new_worker_executor(self):
+        return ThreadPoolExecutor(
+            max_workers=settings.DEFAULT_STOMP_PROCESS_MSG_WORKERS,
+            thread_name_prefix=self.listener_name,
+        )
+
+    def handle_incoming_message(self, body, headers):
+        if self._should_process_msg_on_background:
+            self._submit_task_to_worker_pool(body, headers)
+        else:
+            self.message_handler(body, headers)
+
+    def _submit_task_to_worker_pool(self, body, headers):
+        try:
+            self._pool_executor.submit(self.message_handler, body, headers)
+        except RuntimeError:
+            logger.warning("Worker pool was shutdown!")
+            self._pool_executor = self._create_new_worker_executor()
+            self._pool_executor.submit(self.message_handler, body, headers)
 
     def message_handler(self, body, headers):
         local_threading.request_id = _get_or_create_correlation_id(headers)
@@ -112,6 +137,11 @@ class Consumer(Base):
             self._disconnect()
         else:
             logger.info("Consumer not started")
+
+        try:
+            self._pool_executor.shutdown(wait=False)
+        except Exception:
+            pass
 
     def _create_dlq_queue(self, destination, headers, queue_name=None):
         if not self.subscribe_id:

@@ -29,7 +29,7 @@ class ConsumerListener(BaseListener):
             logger.info("Message id received: %s", frame.headers["message-id"])
             logger.debug("Message body received: %s", frame.body)
             logger.debug("Message headers received: %s", frame.headers)
-            self.instance.message_handler(frame.body, frame.headers)
+            self.instance.handle_incoming_message(frame.body, frame.headers)
 
 
 class ProducerListener(BaseListener):

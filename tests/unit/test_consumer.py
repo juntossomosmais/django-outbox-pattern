@@ -136,3 +136,114 @@ class GetOrCreateCorrelationIdTest(SimpleTestCase):
         with patch(f"{_get_or_create_correlation_id.__module__}.uuid4", wraps=uuid4) as uuid4_spy:
             self.assertIsNotNone(_get_or_create_correlation_id(headers))
             uuid4_spy.assert_called_once()
+
+
+class ConsumerBackgroundProcessingTest(SimpleTestCase):
+    def setUp(self):
+        # Patch out the real connection creation so factory_consumer doesn't try to reach a broker
+        self.factory_conn_patcher = patch("django_outbox_pattern.factories.factory_connection")
+        self.factory_conn_patcher.start()
+
+    def tearDown(self):
+        self.factory_conn_patcher.stop()
+
+    def test_handle_incoming_message_sync_when_background_disabled(self):
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND", False):
+            from django_outbox_pattern.factories import factory_consumer
+
+            consumer = factory_consumer()
+            # Protect against accidental submit usage
+            consumer._pool_executor = Mock()
+            consumer._pool_executor.submit = Mock()
+            consumer.message_handler = Mock()
+
+            body = "{}"
+            headers = {"message-id": "m1"}
+            consumer.handle_incoming_message(body, headers)
+
+            consumer.message_handler.assert_called_once_with(body, headers)
+            consumer._pool_executor.submit.assert_not_called()
+
+    def test_handle_incoming_message_background_enabled_submits(self):
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND", True):
+            from django_outbox_pattern.factories import factory_consumer
+
+            consumer = factory_consumer()
+            consumer.message_handler = Mock()
+            consumer._pool_executor = Mock()
+            consumer._pool_executor.submit = Mock()
+
+            body = "{\"k\": 1}"
+            headers = {"message-id": "m2"}
+            consumer.handle_incoming_message(body, headers)
+
+            consumer._pool_executor.submit.assert_called_once()
+            # Ensure it is submitting the message_handler with the same args
+            submit_args, submit_kwargs = consumer._pool_executor.submit.call_args
+            self.assertEqual(submit_args[0], consumer.message_handler)
+            self.assertEqual(submit_args[1], body)
+            self.assertEqual(submit_args[2], headers)
+            consumer.message_handler.assert_not_called()
+
+    def test_submit_runtimeerror_recreates_executor_and_submits(self):
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND", True):
+            from django_outbox_pattern.factories import factory_consumer
+
+            consumer = factory_consumer()
+            # First executor raises RuntimeError when submitting
+            first_exec = Mock()
+            first_exec.submit = Mock(side_effect=RuntimeError())
+            # Replace consumer's pool executor with our first mock
+            consumer._pool_executor = first_exec
+
+            # New executor to be returned by _create_new_worker_executor
+            new_exec = Mock()
+            new_exec.submit = Mock()
+            with patch.object(consumer, "_create_new_worker_executor", return_value=new_exec) as create_exec_spy:
+                body = "{\"k\": 2}"
+                headers = {"message-id": "m3"}
+                consumer.handle_incoming_message(body, headers)
+
+                create_exec_spy.assert_called_once()
+                new_exec.submit.assert_called_once()
+                submit_args, _ = new_exec.submit.call_args
+                self.assertEqual(submit_args[0], consumer.message_handler)
+                self.assertEqual(submit_args[1], body)
+                self.assertEqual(submit_args[2], headers)
+
+    def test_stop_shuts_down_executor(self):
+        from django_outbox_pattern.factories import factory_consumer
+
+        consumer = factory_consumer()
+        consumer._pool_executor = Mock()
+        consumer._pool_executor.shutdown = Mock()
+
+        # Ensure stop calls shutdown regardless of connection status
+        consumer.stop()
+        consumer._pool_executor.shutdown.assert_called_once_with(wait=False)
+
+
+class ConsumerListenerRoutingTest(SimpleTestCase):
+    def setUp(self):
+        self.factory_conn_patcher = patch("django_outbox_pattern.factories.factory_connection")
+        self.factory_conn_patcher.start()
+
+    def tearDown(self):
+        self.factory_conn_patcher.stop()
+
+    def test_listener_on_message_routes_to_handle_incoming_message(self):
+        from django_outbox_pattern.factories import factory_consumer
+        from django_outbox_pattern.listeners import ConsumerListener
+
+        consumer = factory_consumer()
+        consumer.subscribe_id = "sub-123"
+        consumer.handle_incoming_message = Mock()
+
+        frame = Mock()
+        frame.body = "{}"
+        frame.headers = {"message-id": "m4", "subscription": "sub-123"}
+
+        listener = ConsumerListener(consumer)
+        listener.on_message(frame)
+
+        consumer.handle_incoming_message.assert_called_once_with(frame.body, frame.headers)
