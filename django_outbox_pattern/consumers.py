@@ -139,7 +139,7 @@ class Consumer(Base):
             logger.info("Consumer not started")
 
         try:
-            self._pool_executor.shutdown(wait=False)
+            self._pool_executor.shutdown(wait=True)
         except Exception:
             pass
 

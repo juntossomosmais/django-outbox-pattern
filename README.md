@@ -392,3 +392,26 @@ The `OUTBOX_PATTERN_CONSUMER_CACHE_KEY` variable controls the key name of the ca
 **DEFAULT_PUBLISHED_CHUNK_SIZE**
 
 The `DEFAULT_PUBLISHED_CHUNK_SIZE` variable controls chunk size for the `publish` command in get message to publish action. Default: 200
+
+**DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND**
+
+Controls whether Consumer processes incoming messages on a background thread pool. When set to `True`, `handle_incoming_message` submits work to a `ThreadPoolExecutor` and returns immediately; the user callback (via `message_handler`) runs asynchronously. This helps keep the listener responsive (e.g., heartbeats) when callbacks are slow or blocking. When `False` (default), messages are processed synchronously and any exception raised by the callback will propagate to the caller. Default: `False`.
+
+Notes:
+- The worker pool is recreated automatically if it was previously shut down and a new message arrives.
+- Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and the message may not be acked/nacked automatically unless an exception occurs.
+
+**DEFAULT_STOMP_PROCESS_MSG_WORKERS**
+
+Number of worker threads in the background pool used when `DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND` is `True`. Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_STOMP_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id. Increase this value if your callback is I/O-bound and you want to process multiple messages concurrently. Default: `1`.
+
+Example configuration:
+
+```python
+# settings.py
+DJANGO_OUTBOX_PATTERN = {
+    # ... other options ...
+    "DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND": True,
+    "DEFAULT_STOMP_PROCESS_MSG_WORKERS": 4,
+}
+```
