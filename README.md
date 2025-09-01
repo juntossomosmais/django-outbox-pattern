@@ -321,6 +321,13 @@ Headers for queues. Default: `{"durable": "true", "auto-delete": "false", "prefe
 
 Time tuples for input and output heartbeats. Default:  `(10000, 10000)`
 
+Optional overrides:
+- **DEFAULT_STOMP_OUTGOING_HEARTBEAT**: Overrides the outgoing heartbeat (ms) if set; otherwise falls back to DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_OUTGOING_HEARTBEAT.
+- **DEFAULT_STOMP_INCOMING_HEARTBEAT**: Overrides the incoming heartbeat (ms) if set; otherwise falls back to DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_INCOMING_HEARTBEAT.
+
+Top-level Django settings supported (compat with django-stomp):
+- `STOMP_OUTGOING_HEARTBEAT` and `STOMP_INCOMING_HEARTBEAT` can be defined at settings.py root to control heartbeats without touching DJANGO_OUTBOX_PATTERN.
+
 **DEFAULT_STOMP_VHOST**
 
 Virtual host. Default: "/"
@@ -395,15 +402,43 @@ The `DEFAULT_PUBLISHED_CHUNK_SIZE` variable controls chunk size for the `publish
 
 **DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND**
 
-Controls whether Consumer processes incoming messages on a background thread pool. When set to `True`, `handle_incoming_message` submits work to a `ThreadPoolExecutor` and returns immediately; the user callback (via `message_handler`) runs asynchronously. This helps keep the listener responsive (e.g., heartbeats) when callbacks are slow or blocking. When `False` (default), messages are processed synchronously and any exception raised by the callback will propagate to the caller. Default: `False`.
+Controls whether Consumer processes incoming messages on a background thread pool.
+When set to `True`, `handle_incoming_message` submits work to a `ThreadPoolExecutor` and returns immediately;
+The user callback (via `message_handler`) runs asynchronously. This helps keep the listener responsive (e.g., heartbeats) when callbacks are slow or blocking. When `False` (default), messages are processed synchronously and any exception raised by the callback will propagate to the caller.
+
+Default: `False`.
 
 Notes:
 - The worker pool is recreated automatically if it was previously shut down and a new message arrives.
 - Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and the message may not be acked/nacked automatically unless an exception occurs.
 
-**DEFAULT_STOMP_PROCESS_MSG_WORKERS**
+**DEFAULT_CONSUMER_PROCESS_MSG_WORKERS**
 
-Number of worker threads in the background pool used when `DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND` is `True`. Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_STOMP_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id. Increase this value if your callback is I/O-bound and you want to process multiple messages concurrently. Default: `1`.
+Number of worker threads in the background pool used when `DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND` background processing is enabled
+
+Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_CONSUMER_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id;
+The publish command creates a pool with thread name as "self.listener_name".
+Increase this value if your work is I/O-bound and you want to process multiple messages concurrently.
+
+Default: `1`.
+
+**DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND**
+
+Controls whether the `publish` management command processes each outbox message on a background thread pool.
+When set to `True`, the command submits per-message work to a `ThreadPoolExecutor` and returns to the polling loop immediately; heartbeats and connection handling continue on the main thread via stomp.py.
+The pool is automatically recreated if it was previously shut down.
+
+Default: `False`.
+
+**DEFAULT_PRODUCER_PROCESS_MSG_WORKERS**
+
+Number of worker threads in the background pool used when `DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND` background processing is enabled
+
+Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_PRODUCER_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id;
+The publish command creates a pool with thread name prefix "publisher".
+Increase this value if your work is I/O-bound and you want to process multiple messages concurrently.
+
+Default: `1`.
 
 Example configuration:
 
@@ -412,6 +447,8 @@ Example configuration:
 DJANGO_OUTBOX_PATTERN = {
     # ... other options ...
     "DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND": True,
-    "DEFAULT_STOMP_PROCESS_MSG_WORKERS": 4,
+    "DEFAULT_CONSUMER_PROCESS_MSG_WORKERS": 4,
+    "DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND": True,
+    "DEFAULT_PRODUCER_PROCESS_MSG_WORKERS": 4
 }
 ```
