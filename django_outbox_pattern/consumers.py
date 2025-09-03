@@ -60,7 +60,7 @@ class Consumer(Base):
 
     def _create_new_worker_executor(self):
         return ThreadPoolExecutor(
-            max_workers=settings.DEFAULT_CONSUMER_PROCESS_MSG_WORKERS,
+            max_workers=1,
             thread_name_prefix=self.listener_name,
         )
 

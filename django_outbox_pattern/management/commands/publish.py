@@ -50,7 +50,7 @@ class Command(BaseCommand):
 
     def _create_new_worker_executor(self):
         return ThreadPoolExecutor(
-            max_workers=settings.DEFAULT_PRODUCER_PROCESS_MSG_WORKERS,
+            max_workers=1,
             thread_name_prefix="publisher",
         )
 

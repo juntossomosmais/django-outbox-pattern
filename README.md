@@ -412,16 +412,6 @@ Notes:
 - The worker pool is recreated automatically if it was previously shut down and a new message arrives.
 - Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and the message may not be acked/nacked automatically unless an exception occurs.
 
-**DEFAULT_CONSUMER_PROCESS_MSG_WORKERS**
-
-Number of worker threads in the background pool used when `DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND` background processing is enabled
-
-Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_CONSUMER_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id;
-The publish command creates a pool with thread name as "self.listener_name".
-Increase this value if your work is I/O-bound and you want to process multiple messages concurrently.
-
-Default: `1`.
-
 **DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND**
 
 Controls whether the `publish` management command processes each outbox message on a background thread pool.
@@ -430,16 +420,6 @@ The pool is automatically recreated if it was previously shut down.
 
 Default: `False`.
 
-**DEFAULT_PRODUCER_PROCESS_MSG_WORKERS**
-
-Number of worker threads in the background pool used when `DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND` background processing is enabled
-
-Each Consumer instance creates a `ThreadPoolExecutor(max_workers=DEFAULT_PRODUCER_PROCESS_MSG_WORKERS)` using a thread name prefix tied to the consumer listener id;
-The publish command creates a pool with thread name prefix "publisher".
-Increase this value if your work is I/O-bound and you want to process multiple messages concurrently.
-
-Default: `1`.
-
 Example configuration:
 
 ```python
@@ -447,8 +427,6 @@ Example configuration:
 DJANGO_OUTBOX_PATTERN = {
     # ... other options ...
     "DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND": True,
-    "DEFAULT_CONSUMER_PROCESS_MSG_WORKERS": 4,
-    "DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND": True,
-    "DEFAULT_PRODUCER_PROCESS_MSG_WORKERS": 4
+    "DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND": True
 }
 ```
