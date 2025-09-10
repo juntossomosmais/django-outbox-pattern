@@ -15,7 +15,7 @@ from django_outbox_pattern import settings
 from django_outbox_pattern.bases import Base
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 
-logger = logging.getLogger("django_outbox_pattern")
+_logger = logging.getLogger("django_outbox_pattern")
 
 
 class Producer(Base):
@@ -24,7 +24,6 @@ class Producer(Base):
         self.listener_name = f"producer-listener-{get_uuid()}"
         self.listener_class = import_string(settings.DEFAULT_PRODUCER_LISTENER_CLASS)
         self.published_class = import_string(settings.DEFAULT_PUBLISHED_CLASS)
-        self.set_listener(self.listener_name, self.listener_class(self))
 
     def __enter__(self):
         self.start()
@@ -37,11 +36,10 @@ class Producer(Base):
         self.connect()
 
     def stop(self):
-        if self.is_connected():
-            self.remove_listener(self.listener_name)
+        try:
             self._disconnect()
-        else:
-            logger.info("Producer not started")
+        except Exception as e:
+            _logger.error("Error disconnect listener: %s", e)
 
     def send(self, message, **kwargs):
         kwargs = {

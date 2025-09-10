@@ -9,7 +9,7 @@ from django.utils.module_loading import import_string
 
 from django_outbox_pattern.factories import factory_consumer
 
-logger = logging.getLogger("django_outbox_pattern")
+_logger = logging.getLogger("django_outbox_pattern")
 
 
 def _import_from_string(value):
@@ -41,11 +41,11 @@ class Command(BaseCommand):
             self._exit()
 
     def _exit(self):
-        logger.info("\nI'm not waiting for messages anymore 🥲!")
+        _logger.info("\nI'm not waiting for messages anymore 🥲!")
         sys.exit(0)
 
     def _start(self, consumer, callback, destination, queue_name):
         consumer.start(callback, destination, queue_name)
-        logger.info("Waiting for messages to be consume 😋")
+        _logger.info("Waiting for messages to be consume 😋")
         while self.running and consumer.is_connected():
             sleep(1)

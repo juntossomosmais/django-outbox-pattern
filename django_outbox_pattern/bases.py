@@ -6,7 +6,7 @@ from stomp.exception import StompException
 
 from django_outbox_pattern import settings
 
-logger = logging.getLogger("django_outbox_pattern")
+_logger = logging.getLogger("django_outbox_pattern")
 
 
 class Base:
@@ -45,5 +45,5 @@ class Base:
     def _wait(self):
         self.attempts += 1
         seconds = self._exponential_backoff()
-        logger.debug("%s waiting for %.1f seconds before attempting reconnect", self.__class__.__name__, seconds)
+        _logger.debug("%s waiting for %.1f seconds before attempting reconnect", self.__class__.__name__, seconds)
         time.sleep(seconds)
