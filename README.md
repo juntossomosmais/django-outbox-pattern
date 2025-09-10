@@ -412,21 +412,17 @@ Notes:
 - The worker pool is recreated automatically if it was previously shut down and a new message arrives.
 - Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and the message may not be acked/nacked automatically unless an exception occurs.
 
-**DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND**
-
-Controls whether the `publish` management command processes each outbox message on a background thread pool.
-When set to `True`, the command submits per-message work to a `ThreadPoolExecutor` and returns to the polling loop immediately; heartbeats and connection handling continue on the main thread via stomp.py.
-The pool is automatically recreated if it was previously shut down.
-
-Default: `False`.
-
 Example configuration:
 
 ```python
 # settings.py
 DJANGO_OUTBOX_PATTERN = {
     # ... other options ...
-    "DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND": True,
-    "DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND": True
+    "DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND": True
 }
 ```
+
+**DEFAULT_PRODUCER_WAITING_TIME**
+
+The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new messages to be sent.
+Default: 1 second

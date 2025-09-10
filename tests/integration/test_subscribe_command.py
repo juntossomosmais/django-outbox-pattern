@@ -15,14 +15,15 @@ class SubscribeCommandTest(TestCase):
         self.out = StringIO()
 
     def test_command_output_when_waiting_message(self):
-        call_command("subscribe", "tests.integration.callback.callback", "destination", stdout=self.out)
-        self.assertIn("Waiting for messages to be consume", self.out.getvalue())
+        with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
+            call_command("subscribe", "tests.integration.callback.callback", "destination")
+        self.assertIn("Waiting for messages to be consume", "\n".join(cm.output))
 
     def test_command_no_has_enough_arguments(self):
         with self.assertRaisesMessage(CommandError, "Error: the following arguments are required: destination"):
-            call_command("subscribe", "callback", stdout=self.out)
+            call_command("subscribe", "callback")
 
     def test_command_on_keyboard_input_error(self):
         with patch.object(Command, "_start", side_effect=KeyboardInterrupt()):
             with self.assertRaises(SystemExit):
-                call_command("subscribe", "tests.integration.callback.callback", "destination", stdout=self.out)
+                call_command("subscribe", "tests.integration.callback.callback", "destination")

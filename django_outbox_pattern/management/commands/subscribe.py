@@ -1,3 +1,4 @@
+import logging
 import sys
 
 from time import sleep
@@ -7,6 +8,8 @@ from django.core.management.base import CommandError
 from django.utils.module_loading import import_string
 
 from django_outbox_pattern.factories import factory_consumer
+
+logger = logging.getLogger("django_outbox_pattern")
 
 
 def _import_from_string(value):
@@ -38,11 +41,11 @@ class Command(BaseCommand):
             self._exit()
 
     def _exit(self):
-        self.stdout.write("\nI'm not waiting for messages anymore 🥲!")
+        logger.info("\nI'm not waiting for messages anymore 🥲!")
         sys.exit(0)
 
     def _start(self, consumer, callback, destination, queue_name):
         consumer.start(callback, destination, queue_name)
-        self.stdout.write("Waiting for messages to be consume 😋")
+        logger.info("Waiting for messages to be consume 😋")
         while self.running and consumer.is_connected():
             sleep(1)
