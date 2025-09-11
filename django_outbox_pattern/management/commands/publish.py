@@ -1,7 +1,6 @@
 import logging
 import sys
 
-from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from time import sleep
 
@@ -15,11 +14,11 @@ from django_outbox_pattern.choices import StatusChoice
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 from django_outbox_pattern.factories import factory_producer
 
-logger = logging.getLogger("django_outbox_pattern")
+_logger = logging.getLogger("django_outbox_pattern")
 
 
 def _waiting():
-    sleep(1)
+    sleep(settings.DEFAULT_PRODUCER_WAITING_TIME)
 
 
 class Command(BaseCommand):
@@ -30,8 +29,6 @@ class Command(BaseCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.published_class = import_string(settings.DEFAULT_PUBLISHED_CLASS)
-        self._should_process_on_background = settings.DEFAULT_PRODUCER_PROCESS_MSG_ON_BACKGROUND
-        self._pool_executor = self._create_new_worker_executor() if self._should_process_on_background else None
 
     def handle(self, *args, **options):
         try:
@@ -40,59 +37,43 @@ class Command(BaseCommand):
             self._exit()
 
     def _exit(self):
-        self.stdout.write("\nI'm not waiting for messages anymore 🥲!")
-        try:
-            if self._pool_executor:
-                self._pool_executor.shutdown(wait=True)
-        except Exception:
-            pass
+        _logger.info("I'm not waiting for messages anymore 🥲!")
         sys.exit(0)
 
-    def _create_new_worker_executor(self):
-        return ThreadPoolExecutor(
-            max_workers=1,
-            thread_name_prefix="publisher",
-        )
-
-    def _submit_publish_task(self, message):
-        try:
-            self._pool_executor.submit(self._safe_send_and_update, message)
-        except RuntimeError:
-            logger.warning("Publisher worker pool was shutdown!")
-            self._pool_executor = self._create_new_worker_executor()
-            self._pool_executor.submit(self._safe_send_and_update, message)
-
-    def _safe_send_and_update(self, message):
-        try:
-            attempts = self.producer.send(message)
-        except ExceededSendAttemptsException as exc:
-            logger.exception(exc)
-            message.retry = exc.attempts
-            message.status = StatusChoice.FAILED
-            message.expires_at = timezone.now() + timedelta(15)
-            self.stdout.write(f"Message no published with body:\n{message.body}")
-        else:
-            message.retry = attempts
-            message.status = StatusChoice.SUCCEEDED
-            self.stdout.write(f"Message published with body:\n{message.body}")
-        finally:
-            message.save()
-
     def _publish(self):
-        self.producer.start()
-        self.stdout.write("Waiting for messages to be published 😋\nQuit with CONTROL-C")
+        _logger.info("Waiting for messages to be published 😋.")
         while self.running:
             try:
-                published = self.published_class.objects.filter(
+                objects_to_publish = self.published_class.objects.filter(
                     status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
-                ).iterator(chunk_size=int(settings.DEFAULT_PUBLISHED_CHUNK_SIZE))
+                )
+                if not objects_to_publish.exists():
+                    _logger.debug("No objects to publish")
+                    _waiting()
+                    continue
+
+                published = objects_to_publish.iterator(chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE)
+                self.producer.start()
                 for message in published:
-                    if self._should_process_on_background:
-                        self._submit_publish_task(message)
+                    message_id = message.id
+                    _logger.debug("Message to published with body: %s", message.body)
+                    try:
+                        attempts = self.producer.send(message)
+                    except ExceededSendAttemptsException as exc:
+                        _logger.exception("Exceeded send attempts")
+                        message.retry = exc.attempts
+                        message.status = StatusChoice.FAILED
+                        message.expires_at = timezone.now() + timedelta(15)
+                        _logger.info(f"Message no published with id: {message_id}")
                     else:
-                        self._safe_send_and_update(message)
+                        message.retry = attempts
+                        message.status = StatusChoice.SUCCEEDED
+                        _logger.info(f"Message published with id: {message_id}")
+                    finally:
+                        message.save()
+                self.producer.stop()
             except DatabaseError:
-                self.stdout.write("Starting publisher 🤔\nQuit with CONTROL-C")
+                _logger.info("Starting publisher 🤔.")
                 _waiting()
             else:
                 _waiting()

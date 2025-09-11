@@ -20,26 +20,30 @@ class PublishCommandTest(TestCase):
         self.out = StringIO()
 
     def test_command_output_when_no_message_published(self):
-        call_command("publish", stdout=self.out)
-        self.assertIn("Waiting for messages to be published", self.out.getvalue())
+        with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
+            call_command("publish")
+            self.assertIn("Waiting for messages to be published", "\n".join(cm.output))
 
     def test_command_output_when_message_published(self):
-        Published.objects.create(destination="test", body={})
-        call_command("publish", stdout=self.out)
-
-        self.assertIn("Message published with body", self.out.getvalue())
+        published = Published.objects.create(destination="test", body={})
+        with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
+            call_command("publish")
+            self.assertIn(f"Message published with id: {str(published.id)}", "\n".join(cm.output))
 
     def test_command_on_database_error(self):
+        Published.objects.create(destination="test", body={})
         with patch.object(publish, "import_string") as import_string:
             magic_import_string = MagicMock()
             magic_import_string.objects.filter.side_effect = DatabaseError()
             import_string.return_value = magic_import_string
-            call_command("publish", stdout=self.out)
-            self.assertIn("Starting publisher", self.out.getvalue())
+            with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
+                call_command("publish")
+                self.assertIn("Starting publisher", "\n".join(cm.output))
 
     def test_command_on_exceeded_send_attempts(self):
         settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS = 1
         with patch.object(Command.producer, "send", side_effect=ExceededSendAttemptsException(1)):
-            Published.objects.create(destination="test", body={})
-            call_command("publish", stdout=self.out)
-            self.assertIn("Message no published with body", self.out.getvalue())
+            published = Published.objects.create(destination="test", body={})
+            with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
+                call_command("publish")
+                self.assertIn(f"Message no published with id: {str(published.id)}", "\n".join(cm.output))

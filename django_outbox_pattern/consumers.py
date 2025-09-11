@@ -16,7 +16,7 @@ from django_outbox_pattern import settings
 from django_outbox_pattern.bases import Base
 from django_outbox_pattern.payloads import Payload
 
-logger = logging.getLogger("django_outbox_pattern")
+_logger = logging.getLogger("django_outbox_pattern")
 
 
 def _get_msg_id(headers):
@@ -37,7 +37,7 @@ def _get_or_create_correlation_id(headers: dict) -> str:
         return headers["dop-correlation-id"]
 
     correlation_id = str(uuid4())
-    logger.debug("A new dop-correlation-id was generated %s", correlation_id)
+    _logger.debug("A new dop-correlation-id was generated %s", correlation_id)
     return correlation_id
 
 
@@ -74,7 +74,7 @@ class Consumer(Base):
         try:
             self._pool_executor.submit(self.message_handler, body, headers)
         except RuntimeError:
-            logger.warning("Worker pool was shutdown!")
+            _logger.warning("Worker pool was shutdown!")
             self._pool_executor = self._create_new_worker_executor()
             self._pool_executor.submit(self.message_handler, body, headers)
 
@@ -83,14 +83,14 @@ class Consumer(Base):
         try:
             body = json.loads(body)
         except json.JSONDecodeError as exc:
-            logger.exception(exc)
+            _logger.exception(exc)
 
         payload = Payload(self.connection, body, headers)
         message_id = _get_msg_id(headers)
 
         if self.received_class.objects.filter(msg_id=message_id).exists():
             db.close_old_connections()
-            logger.info(f"Message with msg_id: {message_id} already exists. discarding the message")
+            _logger.info(f"Message with msg_id: {message_id} already exists. discarding the message")
             payload.ack()
             return
 
@@ -103,7 +103,7 @@ class Consumer(Base):
             if payload.saved:
                 payload.ack()
             elif not payload.saved or not payload.nacked:
-                logger.warning(
+                _logger.warning(
                     "The save or nack command was not executed, and the routine finished running "
                     "without receiving an acknowledgement or a negative acknowledgement. "
                     "message-id: %s",
@@ -111,7 +111,7 @@ class Consumer(Base):
                 )
 
         except Exception:
-            logger.exception("An exception has been caught during callback processing flow")
+            _logger.exception("An exception has been caught during callback processing flow")
             payload.nack()
 
         finally:
@@ -128,7 +128,7 @@ class Consumer(Base):
         self.queue_name = queue_name
         self._create_dlq_queue(destination, self.subscribe_headers, queue_name)
         self._create_queue(destination, self.subscribe_headers, queue_name)
-        logger.info("Consumer started with id: %s", self.subscribe_id)
+        _logger.info("Consumer started with id: %s", self.subscribe_id)
 
     def stop(self):
         if self.subscribe_id and self.is_connected():
@@ -136,7 +136,7 @@ class Consumer(Base):
             self.remove_listener(self.listener_name)
             self._disconnect()
         else:
-            logger.info("Consumer not started")
+            _logger.info("Consumer not started")
 
         try:
             self._pool_executor.shutdown(wait=True)
@@ -171,11 +171,11 @@ class Consumer(Base):
             self.connection.subscribe(queue_name, subscribe_id, ack="client", headers=headers)
         else:
             self.connection.subscribe(destination, subscribe_id, ack="client", headers=headers)
-        logger.info("Created queue %s with id: %s", queue_name, subscribe_id)
+        _logger.info("Created queue %s with id: %s", queue_name, subscribe_id)
 
     def _unsubscribe(self):
         self.connection.unsubscribe(self.subscribe_id)
-        logger.info("Subscription with id %s canceled", self.subscribe_id)
+        _logger.info("Subscription with id %s canceled", self.subscribe_id)
         self.subscribe_id = None
 
     def _remove_old_messages(self):

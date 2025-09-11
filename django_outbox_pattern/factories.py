@@ -8,16 +8,17 @@ USERNAME = settings.DEFAULT_STOMP_USERNAME
 PASSCODE = settings.DEFAULT_STOMP_PASSCODE
 
 
-def factory_connection():
+def factory_connection(use_heartbeats: bool = True):
     host_and_ports = settings.DEFAULT_STOMP_HOST_AND_PORTS
     heartbeats = settings.DEFAULT_STOMP_HEARTBEATS
     vhost = settings.DEFAULT_STOMP_VHOST
+
     connection_class = import_string(settings.DEFAULT_CONNECTION_CLASS)
-    connection = connection_class(
-        host_and_ports=host_and_ports,
-        heartbeats=heartbeats,
-        vhost=vhost,
-    )
+    connection_parameters = {"host_and_ports": host_and_ports, "vhost": vhost}
+    if use_heartbeats:
+        connection_parameters["heartbeats"] = heartbeats
+    connection = connection_class(**connection_parameters)
+
     use_ssl = settings.DEFAULT_STOMP_USE_SSL
     if use_ssl:
         key_file = settings.DEFAULT_STOMP_KEY_FILE
@@ -49,5 +50,5 @@ def factory_consumer():
 def factory_producer():
     username = USERNAME
     passcode = PASSCODE
-    connection = factory_connection()
+    connection = factory_connection(use_heartbeats=False)
     return Producer(connection, username, passcode)
