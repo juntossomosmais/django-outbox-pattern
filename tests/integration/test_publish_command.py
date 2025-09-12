@@ -9,7 +9,6 @@ from django.test import TestCase
 
 from django_outbox_pattern import settings
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
-from django_outbox_pattern.management.commands import publish
 from django_outbox_pattern.management.commands.publish import Command
 from django_outbox_pattern.models import Published
 
@@ -31,14 +30,12 @@ class PublishCommandTest(TestCase):
             self.assertIn(f"Message published with id: {str(published.id)}", "\n".join(cm.output))
 
     def test_command_on_database_error(self):
-        Published.objects.create(destination="test", body={})
-        with patch.object(publish, "import_string") as import_string:
-            magic_import_string = MagicMock()
-            magic_import_string.objects.filter.side_effect = DatabaseError()
-            import_string.return_value = magic_import_string
+        mock_published_class = MagicMock()
+        mock_published_class.objects.filter.side_effect = DatabaseError()
+        with patch.object(Command.producer, "published_class", mock_published_class):
             with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
                 call_command("publish")
-                self.assertIn("Starting publisher", "\n".join(cm.output))
+            self.assertIn("Starting publisher", "\n".join(cm.output))
 
     def test_command_on_exceeded_send_attempts(self):
         settings.DEFAULT_MAXIMUM_RETRY_ATTEMPTS = 1

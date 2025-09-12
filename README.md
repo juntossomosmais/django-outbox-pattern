@@ -46,7 +46,9 @@ python manage.py migrate
 
 ## Usage/Examples
 
-The `publish` decorator adds the [outbox table](https://github.com/juntossomosmais/django-outbox-pattern/blob/main/django_outbox_pattern/models.py#L14) to the model. `publish` accepts list of Config. The Config accepts four params the `destination` which is required,
+The `publish` decorator adds
+the [outbox table](https://github.com/juntossomosmais/django-outbox-pattern/blob/main/django_outbox_pattern/models.py#L14)
+to the model. `publish` accepts list of Config. The Config accepts four params the `destination` which is required,
 `fields` which the default are all the fields of the model, `serializer` which by default adds the `id` in the message
 to be sent and `version` which by default is empty.
 
@@ -58,6 +60,7 @@ to be sent and `version` which by default is empty.
 from typing import List
 from typing import NamedTuple
 from typing import Optional
+
 
 class Config(NamedTuple):
     destination: str
@@ -202,12 +205,13 @@ python manage.py publish
 ##### Publish message via outbox
 
 It is possible to use the outbox pattern with a custom logic before sending the message to the outbox table.
+
 ```python
 from django.db import transaction
 from django_outbox_pattern.models import Published
 
-def custom_business_logic() -> None:
 
+def custom_business_logic() -> None:
     # run your custom business logic
 
     with transaction.atomic():
@@ -215,6 +219,7 @@ def custom_business_logic() -> None:
         Published.objects.create(destination="your_destination", body={"some": "data"})
 
 ```
+
 With this you can ensure that the messages can be published in the same database transaction of your business logic.
 
 ##### Publish message directly
@@ -225,6 +230,7 @@ It is possible to send messages directly without using the outbox table
 # send.py
 from django_outbox_pattern.factories import factory_producer
 
+
 def send_event(destination, body, headers):
     with factory_producer() as producer:
         producer.send_event(destination=destination, body=body, headers=headers)
@@ -232,14 +238,21 @@ def send_event(destination, body, headers):
 
 ##### Subscribe command
 
-Consumers created through the library implement the idempotency pattern using the header attribute `message-id`. The library configures it as unique in the database. This ensures a given message is only processed once, no matter what.
-To correctly implement this, you must open a transaction with the database to persist the data from your logic and execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the message is removed from the broker.
+Consumers created through the library implement the idempotency pattern using the header attribute `message-id`. The
+library configures it as unique in the database. This ensures a given message is only processed once, no matter what.
+To correctly implement this, you must open a transaction with the database to persist the data from your logic and
+execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the
+message is removed from the broker.
 
-If you need to discard the message due to a business rule, use the `nack` method of the Payload object. This call removes the message from the broker. This method performs no persistence in the database and can be called outside your database transaction. If it fails for any reason, the message is resent to the consumer.
+If you need to discard the message due to a business rule, use the `nack` method of the Payload object. This call
+removes the message from the broker. This method performs no persistence in the database and can be called outside your
+database transaction. If it fails for any reason, the message is resent to the consumer.
 
 **Alert:**
 
-**You need to use either `save` or `nack` to process of your message. The library cannot make the decision for the developer, and it is up to the developer to determine whether to use the `save` or `nack` method. However, in case of an exception during the operation, the `nack` method will be triggered automatically**
+**You need to use either `save` or `nack` to process of your message. The library cannot make the decision for the
+developer, and it is up to the developer to determine whether to use the `save` or `nack` method. However, in case of an
+exception during the operation, the `nack` method will be triggered automatically**
 
 **The same service (code + database) cannot consume the same message even with different consumers.**
 
@@ -250,8 +263,8 @@ Create a function that receives an instance of `django_outbox_pattern.payloads.P
 from django.db import transaction
 from django_outbox_pattern.payloads import Payload
 
-def callback(payload: Payload):
 
+def callback(payload: Payload):
     if message_is_invalid(payload.body):
         payload.nack()
         return
@@ -267,13 +280,16 @@ To start the consumer, after creating the callback, it is necessary to execute t
 ```shell
 python manage.py subscribe 'dotted.path.to.callback` 'destination' 'queue_name'
 ```
+
 The command takes three parameters:
 
 `callback` : the path to the callback function.
 
-`destination` : the destination where messages will be consumed following one of the [stomp](https://www.rabbitmq.com/stomp.html) patterns
+`destination` : the destination where messages will be consumed following one of
+the [stomp](https://www.rabbitmq.com/stomp.html) patterns
 
-`queue_name`(optional): the name of the queue that will be consumed. If not provided, the routing_key of the destination will be used.
+`queue_name`(optional): the name of the queue that will be consumed. If not provided, the routing_key of the destination
+will be used.
 
 ## Settings
 
@@ -322,11 +338,19 @@ Headers for queues. Default: `{"durable": "true", "auto-delete": "false", "prefe
 Time tuples for input and output heartbeats. Default:  `(10000, 10000)`
 
 Optional overrides:
-- **DEFAULT_STOMP_OUTGOING_HEARTBEAT**: Overrides the outgoing heartbeat (ms) if set; otherwise falls back to DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_OUTGOING_HEARTBEAT.
-- **DEFAULT_STOMP_INCOMING_HEARTBEAT**: Overrides the incoming heartbeat (ms) if set; otherwise falls back to DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_INCOMING_HEARTBEAT.
+
+- **DEFAULT_STOMP_OUTGOING_HEARTBEAT**: Overrides the outgoing heartbeat (ms) if set; otherwise falls back to
+  DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_OUTGOING_HEARTBEAT.
+- **DEFAULT_STOMP_INCOMING_HEARTBEAT**: Overrides the incoming heartbeat (ms) if set; otherwise falls back to
+  DEFAULT_STOMP_HEARTBEATS and/or top-level STOMP_INCOMING_HEARTBEAT.
 
 Top-level Django settings supported (compat with django-stomp):
-- `STOMP_OUTGOING_HEARTBEAT` and `STOMP_INCOMING_HEARTBEAT` can be defined at settings.py root to control heartbeats without touching DJANGO_OUTBOX_PATTERN.
+
+- `STOMP_OUTGOING_HEARTBEAT` and `STOMP_INCOMING_HEARTBEAT` can be defined at settings.py root to control heartbeats
+  without touching DJANGO_OUTBOX_PATTERN.
+
+> warning: The heartbeat only works at consumer connection. The publisher process open and close connection for each
+> batch message to publish.
 
 **DEFAULT_STOMP_VHOST**
 
@@ -351,7 +375,6 @@ The path to a X509 key file. Default: None
 **DEFAULT_STOMP_CERT_FILE**
 
 The path to a X509 certificate. Default: None
-
 
 **DEFAULT_STOMP_CA_CERTS**
 
@@ -386,31 +409,41 @@ The total number of days that the system will keep a message in the database his
 
 **REMOVE_DATA_CACHE_TTL**
 
-This variable defines the time-to-live (TTL) value in seconds for the cache used by the `_remove_old_messages` method in the `django_outbox_pattern` application. The cache is used to prevent the method from deleting old data every time it is run, and the TTL value determines how long the cache entry should remain valid before being automatically deleted. It can be customized by setting the REMOVE_DATA_CACHE_TTL variable. Default: 86400 seconds (1 day)
+This variable defines the time-to-live (TTL) value in seconds for the cache used by the `_remove_old_messages` method in
+the `django_outbox_pattern` application. The cache is used to prevent the method from deleting old data every time it is
+run, and the TTL value determines how long the cache entry should remain valid before being automatically deleted. It
+can be customized by setting the REMOVE_DATA_CACHE_TTL variable. Default: 86400 seconds (1 day)
 
 **OUTBOX_PATTERN_PUBLISHER_CACHE_KEY**
 
-The `OUTBOX_PATTERN_PUBLISHER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern publisher. Default: `remove_old_messages_django_outbox_pattern_publisher`.
+The `OUTBOX_PATTERN_PUBLISHER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern
+publisher. Default: `remove_old_messages_django_outbox_pattern_publisher`.
 
 **OUTBOX_PATTERN_CONSUMER_CACHE_KEY**
 
-The `OUTBOX_PATTERN_CONSUMER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern publisher. Default: `remove_old_messages_django_outbox_pattern_consumer`.
+The `OUTBOX_PATTERN_CONSUMER_CACHE_KEY` variable controls the key name of the cache used to store the outbox pattern
+publisher. Default: `remove_old_messages_django_outbox_pattern_consumer`.
 
 **DEFAULT_PUBLISHED_CHUNK_SIZE**
 
-The `DEFAULT_PUBLISHED_CHUNK_SIZE` variable controls chunk size for the `publish` command in get message to publish action. Default: 200
+The `DEFAULT_PUBLISHED_CHUNK_SIZE` variable controls chunk size for the `publish` command in get message to publish
+action. Default: 200
 
 **DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND**
 
 Controls whether Consumer processes incoming messages on a background thread pool.
 When set to `True`, `handle_incoming_message` submits work to a `ThreadPoolExecutor` and returns immediately;
-The user callback (via `message_handler`) runs asynchronously. This helps keep the listener responsive (e.g., heartbeats) when callbacks are slow or blocking. When `False` (default), messages are processed synchronously and any exception raised by the callback will propagate to the caller.
+The user callback (via `message_handler`) runs asynchronously. This helps keep the listener responsive (e.g.,
+heartbeats) when callbacks are slow or blocking. When `False` (default), messages are processed synchronously and any
+exception raised by the callback will propagate to the caller.
 
 Default: `False`.
 
 Notes:
+
 - The worker pool is recreated automatically if it was previously shut down and a new message arrives.
-- Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and the message may not be acked/nacked automatically unless an exception occurs.
+- Ensure your callback calls `payload.save()` (or `payload.nack()` when appropriate); otherwise a warning is logged and
+  the message may not be acked/nacked automatically unless an exception occurs.
 
 Example configuration:
 
@@ -424,5 +457,6 @@ DJANGO_OUTBOX_PATTERN = {
 
 **DEFAULT_PRODUCER_WAITING_TIME**
 
-The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new messages to be sent.
+The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new
+messages to be sent.
 Default: 1 second
