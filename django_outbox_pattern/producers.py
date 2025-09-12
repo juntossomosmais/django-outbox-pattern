@@ -6,6 +6,7 @@ from time import sleep
 
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db import DatabaseError
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from stomp.exception import StompException
@@ -13,6 +14,7 @@ from stomp.utils import get_uuid
 
 from django_outbox_pattern import settings
 from django_outbox_pattern.bases import Base
+from django_outbox_pattern.choices import StatusChoice
 from django_outbox_pattern.exceptions import ExceededSendAttemptsException
 
 _logger = logging.getLogger("django_outbox_pattern")
@@ -92,3 +94,42 @@ class Producer(Base):
         self.published_class.objects.filter(added__lt=days_ago).delete()
 
         cache.set(settings.OUTBOX_PATTERN_PUBLISHER_CACHE_KEY, True, settings.REMOVE_DATA_CACHE_TTL)
+
+    def _waiting(self):
+        sleep(settings.DEFAULT_PRODUCER_WAITING_TIME)
+
+    def publish_message_from_database(self):
+        try:
+            objects_to_publish = self.published_class.objects.filter(
+                status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
+            )
+            if not objects_to_publish.exists():
+                _logger.debug("No objects to publish")
+                self._waiting()
+                return
+
+            published = objects_to_publish.iterator(chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE)
+            self.start()
+            for message in published:
+                message_id = message.id
+                _logger.debug("Message to published with body: %s", message.body)
+                try:
+                    attempts = self.send(message)
+                except ExceededSendAttemptsException as exc:
+                    _logger.exception("Exceeded send attempts")
+                    message.retry = exc.attempts
+                    message.status = StatusChoice.FAILED
+                    message.expires_at = timezone.now() + timedelta(15)
+                    _logger.info(f"Message no published with id: {message_id}")
+                else:
+                    message.retry = attempts
+                    message.status = StatusChoice.SUCCEEDED
+                    _logger.info(f"Message published with id: {message_id}")
+                finally:
+                    message.save()
+            self.stop()
+        except DatabaseError:
+            _logger.info("Starting publisher 🤔.")
+            self._waiting()
+        else:
+            self._waiting()
