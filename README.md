@@ -291,6 +291,26 @@ the [stomp](https://www.rabbitmq.com/stomp.html) patterns
 `queue_name`(optional): the name of the queue that will be consumed. If not provided, the routing_key of the destination
 will be used.
 
+##### Purge command
+
+Sometimes published or received models can grow too much and you need to purge the messages. You can use the `python manage.py purge` command to purge the messages.
+
+```shell
+python manage.py purge
+```
+
+The command can take four parameters:
+
+`days` : the number of days to keep the messages. Default: 30
+
+`purge_received_only` : purge the received messages only. Default: False
+
+`purge_published_only` : purge the published messages only. Default: False
+
+`include_scheduled` : include the scheduled messages. Default: False
+
+`batch_size` : the batch size to purge the messages. Default: 500
+
 ## Settings
 
 **DEFAULT_CONNECTION_CLASS**
