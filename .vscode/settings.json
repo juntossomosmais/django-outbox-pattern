@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "juntossomosmais",
+        "projectKey": "juntossomosmais_django-outbox-pattern"
+    }
+}

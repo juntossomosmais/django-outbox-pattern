@@ -36,16 +36,6 @@ class Published(models.Model):
         indexes = [
             models.Index(fields=["status"], name="published_status_27c9ec_btree"),
             models.Index(fields=["added"], name="published_added_idx"),
-            models.Index(
-                fields=["expires_at"],
-                name="dop_published_is_not_expired_idx",
-                condition=models.Q(expires_at__gt=timezone.now()),
-            ),
-            models.Index(
-                fields=["expires_at"],
-                name="dop_published_is_expired_idx",
-                condition=models.Q(expires_at__lt=timezone.now()),
-            ),
         ]
 
     def __str__(self):
@@ -84,18 +74,8 @@ class Received(models.Model):
         db_table = "received"
 
         indexes = [
-            models.Index(fields=["status"], name="received_status_idx"),
-            models.Index(fields=["added"], name="received_added_idx"),
-            models.Index(
-                fields=["expires_at"],
-                name="dop_received_is_not_expired_idx",
-                condition=models.Q(expires_at__gt=timezone.now()),
-            ),
-            models.Index(
-                fields=["expires_at"],
-                name="dop_received_is_expired_idx",
-                condition=models.Q(expires_at__lt=timezone.now()),
-            ),
+            models.Index(fields=["status"], name="dop_rec_status_idx"),
+            models.Index(fields=["added"], name="dop_rec_added_idx"),
         ]
 
     def __str__(self):
