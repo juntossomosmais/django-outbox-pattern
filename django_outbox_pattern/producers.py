@@ -7,6 +7,7 @@ from time import sleep
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import DatabaseError
+from django.db import transaction
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from stomp.exception import StompException
@@ -26,6 +27,7 @@ class Producer(Base):
         self.listener_name = f"producer-listener-{get_uuid()}"
         self.listener_class = import_string(settings.DEFAULT_PRODUCER_LISTENER_CLASS)
         self.published_class = import_string(settings.DEFAULT_PUBLISHED_CLASS)
+        self._consecutive_empty_polls = 0
 
     def __enter__(self):
         self.start()
@@ -96,40 +98,81 @@ class Producer(Base):
         cache.set(settings.OUTBOX_PATTERN_PUBLISHER_CACHE_KEY, True, settings.REMOVE_DATA_CACHE_TTL)
 
     def _waiting(self):
-        sleep(settings.DEFAULT_PRODUCER_WAITING_TIME)
+        """
+        Adaptive waiting strategy to reduce database load during idle periods.
+
+        Progressively increases wait time based on consecutive empty polls:
+        - 0 empty polls: 1 second (immediate response when active)
+        - 1-4 empty polls: 3 seconds (brief idle period)
+        - 5-9 empty polls: 5 seconds (moderate idle period)
+        - 10+ empty polls: 10 seconds (extended idle period)
+        """
+        if self._consecutive_empty_polls == 0:
+            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME  # 1 second
+        elif self._consecutive_empty_polls < 5:
+            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 3  # 3 seconds
+        elif self._consecutive_empty_polls < 10:
+            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 5  # 5 seconds
+        else:
+            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 10  # 10 seconds max
+
+        _logger.debug(f"Waiting {wait_time}s after {self._consecutive_empty_polls} empty polls")
+        sleep(wait_time)
 
     def publish_message_from_database(self):
         try:
-            objects_to_publish = self.published_class.objects.filter(
-                status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
-            )
-            if not objects_to_publish.exists():
+            # Fetch message IDs with row-level locking to prevent race conditions
+            with transaction.atomic():
+                message_ids = list(
+                    self.published_class.objects.select_for_update(skip_locked=True)
+                    .filter(status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now())
+                    .values_list("id", flat=True)[: settings.DEFAULT_PUBLISHED_CHUNK_SIZE]
+                )
+
+            if not message_ids:
                 _logger.debug("No objects to publish")
+                # Increment counter for adaptive waiting strategy
+                self._consecutive_empty_polls += 1
                 self._waiting()
                 return
 
-            published = objects_to_publish.iterator(chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE)
+            # Reset counter when messages are found - immediate response for active periods
+            self._consecutive_empty_polls = 0
+
             self.start()
-            for message in published:
-                message_id = message.id
-                _logger.debug("Message to published with body: %s", message.body)
-                try:
-                    attempts = self.send(message)
-                except ExceededSendAttemptsException as exc:
-                    _logger.exception("Exceeded send attempts")
-                    message.retry = exc.attempts
-                    message.status = StatusChoice.FAILED
-                    message.expires_at = timezone.now() + timedelta(15)
-                    _logger.info(f"Message no published with id: {message_id}")
-                else:
-                    message.retry = attempts
-                    message.status = StatusChoice.SUCCEEDED
-                    _logger.info(f"Message published with id: {message_id}")
-                finally:
-                    message.save()
+
+            # Process each message individually with its own lock
+            for message_id in message_ids:
+                with transaction.atomic():
+                    # Lock the specific message for processing
+                    message = self.published_class.objects.select_for_update().get(id=message_id)
+
+                    # Double-check status in case another worker processed it
+                    if message.status != StatusChoice.SCHEDULE:
+                        continue
+
+                    _logger.debug("Message to published with body: %s", message.body)
+
+                    try:
+                        attempts = self.send(message)
+                    except ExceededSendAttemptsException as exc:
+                        _logger.exception("Exceeded send attempts")
+                        message.retry = exc.attempts
+                        message.status = StatusChoice.FAILED
+                        message.expires_at = timezone.now() + timedelta(minutes=15)
+                        _logger.info(f"Message no published with id: {message_id}")
+                    else:
+                        message.retry = attempts
+                        message.status = StatusChoice.SUCCEEDED
+                        _logger.info(f"Message published with id: {message_id}")
+                    finally:
+                        message.save()
+
             self.stop()
         except DatabaseError:
             _logger.info("Starting publisher 🤔.")
+            # Don't increment empty polls counter on database errors
             self._waiting()
         else:
+            # Normal completion - apply adaptive waiting
             self._waiting()
