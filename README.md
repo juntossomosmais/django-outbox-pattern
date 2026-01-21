@@ -457,6 +457,17 @@ DJANGO_OUTBOX_PATTERN = {
 
 **DEFAULT_PRODUCER_WAITING_TIME**
 
-The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new
-messages to be sent.
+The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the base waiting time in seconds for the producer to check for new
+messages to be sent. The producer uses an adaptive waiting strategy that progressively increases wait times during idle
+periods to reduce database load:
+
+- **0 empty polls**: Uses the configured value (immediate response when active)
+- **1-4 empty polls**: 3x the configured value (brief idle period)
+- **5-9 empty polls**: 5x the configured value (moderate idle period)
+- **10+ empty polls**: 10x the configured value (extended idle period, maximum)
+
+This adaptive approach reduces database queries by approximately 90% during idle periods while maintaining responsiveness
+when messages are actively being processed. The counter resets to 0 whenever messages are found, ensuring immediate
+response times during active periods.
+
 Default: 1 second
