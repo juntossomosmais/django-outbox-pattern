@@ -457,6 +457,4 @@ DJANGO_OUTBOX_PATTERN = {
 
 **DEFAULT_PRODUCER_WAITING_TIME**
 
-The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the base waiting time in seconds for the producer to check for new
-messages to be sent.
-Default: 1 second
+The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new messages to be sent. Default: 1 second
