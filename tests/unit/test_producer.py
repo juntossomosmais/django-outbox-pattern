@@ -130,12 +130,7 @@ class ProducerRaceConditionTest(TransactionTestCase):
             mock_send.assert_not_called()
 
     def test_concurrent_publishers_cannot_process_same_message(self):
-        message1 = Published.objects.create(
-            destination="destination", body={"message": "test1"}, status=StatusChoice.SCHEDULE
-        )
-        message2 = Published.objects.create(
-            destination="destination", body={"message": "test2"}, status=StatusChoice.SCHEDULE
-        )
+        Published.objects.create(destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE)
 
         # Mock select_for_update to simulate that another publisher processed the message first
         with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
@@ -150,58 +145,6 @@ class ProducerRaceConditionTest(TransactionTestCase):
                 mock_select.assert_called()
                 # No messages should be sent since they were already processed
                 mock_send.assert_not_called()
-
-    def test_adaptive_waiting_strategy(self):
-        # Mock sleep to avoid actual waiting and capture wait times
-        with patch("django_outbox_pattern.producers.sleep") as mock_sleep:
-            # Test progressive wait times with consecutive empty polls
-
-            # First empty poll - should wait 1 second (default)
-            self.producer._consecutive_empty_polls = 0
-            self.producer._waiting()
-            mock_sleep.assert_called_with(settings.DEFAULT_PRODUCER_WAITING_TIME)
-
-            # 2nd-5th empty polls - should wait 3 seconds
-            self.producer._consecutive_empty_polls = 3
-            self.producer._waiting()
-            mock_sleep.assert_called_with(settings.DEFAULT_PRODUCER_WAITING_TIME * 3)
-
-            # 6th-10th empty polls - should wait 5 seconds
-            self.producer._consecutive_empty_polls = 7
-            self.producer._waiting()
-            mock_sleep.assert_called_with(settings.DEFAULT_PRODUCER_WAITING_TIME * 5)
-
-            # 10+ empty polls - should wait 10 seconds max
-            self.producer._consecutive_empty_polls = 15
-            self.producer._waiting()
-            mock_sleep.assert_called_with(settings.DEFAULT_PRODUCER_WAITING_TIME * 10)
-
-    def test_empty_polls_counter_increments_and_resets(self):
-        # Start with no empty polls
-        self.assertEqual(self.producer._consecutive_empty_polls, 0)
-
-        # Mock to simulate no messages found in the initial fetch
-        with patch.object(self.producer.published_class.objects, "filter") as mock_filter:
-            with patch("django_outbox_pattern.producers.sleep"):
-                mock_filter.return_value.values_list.return_value.__getitem__.return_value = []
-
-                # First empty poll
-                self.producer.publish_message_from_database()
-                self.assertEqual(self.producer._consecutive_empty_polls, 1)
-
-                # Second empty poll
-                self.producer.publish_message_from_database()
-                self.assertEqual(self.producer._consecutive_empty_polls, 2)
-
-        # Now simulate finding messages - counter should reset
-        Published.objects.create(destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE)
-
-        with patch.object(self.producer, "send", return_value=0):
-            with patch("django_outbox_pattern.producers.sleep"):
-                self.producer.publish_message_from_database()
-
-        # Counter should be reset to 0 after processing messages
-        self.assertEqual(self.producer._consecutive_empty_polls, 0)
 
     def test_individual_message_locking_uses_select_for_update(self):
         """Test that select_for_update is used when fetching individual messages for processing"""

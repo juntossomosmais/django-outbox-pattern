@@ -27,7 +27,6 @@ class Producer(Base):
         self.listener_name = f"producer-listener-{get_uuid()}"
         self.listener_class = import_string(settings.DEFAULT_PRODUCER_LISTENER_CLASS)
         self.published_class = import_string(settings.DEFAULT_PUBLISHED_CLASS)
-        self._consecutive_empty_polls = 0
 
     def __enter__(self):
         self.start()
@@ -98,26 +97,7 @@ class Producer(Base):
         cache.set(settings.OUTBOX_PATTERN_PUBLISHER_CACHE_KEY, True, settings.REMOVE_DATA_CACHE_TTL)
 
     def _waiting(self):
-        """
-        Adaptive waiting strategy to reduce database load during idle periods.
-
-        Progressively increases wait time based on consecutive empty polls:
-        - 0 empty polls: 1 second (immediate response when active)
-        - 1-4 empty polls: 3 seconds (brief idle period)
-        - 5-9 empty polls: 5 seconds (moderate idle period)
-        - 10+ empty polls: 10 seconds (extended idle period)
-        """
-        if self._consecutive_empty_polls == 0:
-            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME  # 1 second
-        elif self._consecutive_empty_polls < 5:
-            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 3  # 3 seconds
-        elif self._consecutive_empty_polls < 10:
-            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 5  # 5 seconds
-        else:
-            wait_time = settings.DEFAULT_PRODUCER_WAITING_TIME * 10  # 10 seconds max
-
-        _logger.debug(f"Waiting {wait_time}s after {self._consecutive_empty_polls} empty polls")
-        sleep(wait_time)
+        sleep(settings.DEFAULT_PRODUCER_WAITING_TIME)
 
     def publish_message_from_database(self):
         try:
@@ -130,13 +110,8 @@ class Producer(Base):
 
             if not message_ids:
                 _logger.debug("No objects to publish")
-                # Increment counter for adaptive waiting strategy
-                self._consecutive_empty_polls += 1
                 self._waiting()
                 return
-
-            # Reset counter when messages are found - immediate response for active periods
-            self._consecutive_empty_polls = 0
 
             self.start()
 
