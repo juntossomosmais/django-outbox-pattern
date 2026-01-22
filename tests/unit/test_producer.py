@@ -109,31 +109,6 @@ class ProducerTest(TestCase):
         self.assertEqual(message1.status, StatusChoice.SUCCEEDED)
         self.assertEqual(message2.status, StatusChoice.SUCCEEDED)
 
-    def test_publish_message_from_database_respects_chunk_size(self):
-        """Test that only DEFAULT_PUBLISHED_CHUNK_SIZE messages are processed per call"""
-        # Create 5 messages
-        messages = []
-        for i in range(5):
-            message = Published.objects.create(
-                destination="destination", body={"message": f"test{i}"}, status=StatusChoice.SCHEDULE
-            )
-            messages.append(message)
-
-        with patch("django_outbox_pattern.settings.DEFAULT_PUBLISHED_CHUNK_SIZE", 3):
-            with patch.object(self.producer, "send", return_value=0) as mock_send:
-                self.producer.publish_message_from_database()
-
-        # Only 3 messages should be processed
-        self.assertEqual(mock_send.call_count, 3)
-
-        # Verify exactly 3 messages are now SUCCEEDED
-        processed_count = Published.objects.filter(status=StatusChoice.SUCCEEDED).count()
-        self.assertEqual(processed_count, 3)
-
-        # Verify 2 messages are still SCHEDULE (pending)
-        pending_count = Published.objects.filter(status=StatusChoice.SCHEDULE).count()
-        self.assertEqual(pending_count, 2)
-
 
 class ProducerRaceConditionTest(TransactionTestCase):
     def setUp(self):
@@ -145,46 +120,60 @@ class ProducerRaceConditionTest(TransactionTestCase):
             destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE
         )
 
-        # Simulate another worker processing the message first
-        message.status = StatusChoice.SUCCEEDED
-        message.save()
+        # Simulate message being processed by another worker between queries
+        with patch.object(self.producer.published_class.objects, "filter") as mock_filter:
+            mock_queryset = Mock()
+            mock_queryset.exists.return_value = True  # Pass the exists() check
+            # Create a message that appears processed when we check its status
+            processed_message = Published(id=message.id, status=StatusChoice.SUCCEEDED)
+            mock_queryset.select_for_update.return_value.iterator.return_value = iter([processed_message])
+            mock_filter.return_value = mock_queryset
 
-        with patch.object(self.producer, "send") as mock_send:
-            # Method should detect message was already processed and not call send()
-            self.producer.publish_message_from_database()
-            mock_send.assert_not_called()
+            with patch.object(self.producer, "send") as mock_send:
+                # Method should detect message was already processed via double-check
+                self.producer.publish_message_from_database()
+                mock_send.assert_not_called()
 
     def test_concurrent_publishers_cannot_process_same_message(self):
         Published.objects.create(destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE)
 
-        # Mock select_for_update to simulate that another publisher processed the message first
-        with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
-            # Create a mock message that was already processed
-            mock_message = Mock()
-            mock_message.status = StatusChoice.SUCCEEDED  # Already processed
-            mock_select.return_value.get.return_value = mock_message
+        # Mock the chained select_for_update().iterator() call
+        with patch.object(self.producer.published_class.objects, "filter") as mock_filter:
+            mock_queryset = Mock()
+            mock_queryset.exists.return_value = True  # Pass the exists() check
+            mock_queryset.select_for_update.return_value.iterator.return_value = iter([])  # No messages available
+            mock_filter.return_value = mock_queryset
 
             with patch.object(self.producer, "send") as mock_send:
                 self.producer.publish_message_from_database()
-                # Verify select_for_update was used for individual message processing
-                mock_select.assert_called()
-                # No messages should be sent since they were already processed
+                # Verify select_for_update was called with skip_locked=True
+                mock_queryset.select_for_update.assert_called_once_with(skip_locked=True)
+                # Verify iterator was called with chunk_size
+                mock_queryset.select_for_update.return_value.iterator.assert_called_once_with(
+                    chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE
+                )
+                # No messages should be sent since skip_locked skipped them
                 mock_send.assert_not_called()
 
-    def test_individual_message_locking_uses_select_for_update(self):
-        """Test that select_for_update is used when fetching individual messages for processing"""
+    def test_queryset_locking_uses_select_for_update_with_skip_locked(self):
+        """Test that select_for_update with skip_locked is used on the queryset with iterator"""
         message = Published.objects.create(
             destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE
         )
 
-        with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
-            # Setup mock chain for select_for_update().get()
-            mock_select.return_value.get.return_value = message
+        # Mock the queryset select_for_update method directly
+        with patch.object(self.producer.published_class.objects, "filter") as mock_filter:
+            mock_queryset = Mock()
+            mock_queryset.exists.return_value = True  # Pass the exists() check
+            mock_queryset.select_for_update.return_value.iterator.return_value = iter([message])
+            mock_filter.return_value = mock_queryset
 
             with patch.object(self.producer, "send", return_value=0):
                 self.producer.publish_message_from_database()
 
-            # Verify select_for_update was called
-            mock_select.assert_called_once_with()
-            # Verify get was called with the message ID
-            mock_select.return_value.get.assert_called_once_with(id=message.id)
+            # Verify select_for_update was called with skip_locked=True
+            mock_queryset.select_for_update.assert_called_once_with(skip_locked=True)
+            # Verify iterator was called with chunk_size
+            mock_queryset.select_for_update.return_value.iterator.assert_called_once_with(
+                chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE
+            )

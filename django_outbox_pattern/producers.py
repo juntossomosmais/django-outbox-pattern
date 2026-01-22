@@ -101,27 +101,26 @@ class Producer(Base):
 
     def publish_message_from_database(self):
         try:
-            # Fetch message IDs to identify available messages for processing
-            message_ids = list(
-                self.published_class.objects.filter(
-                    status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
-                ).values_list("id", flat=True)[: settings.DEFAULT_PUBLISHED_CHUNK_SIZE]
+            objects_to_publish = self.published_class.objects.filter(
+                status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
             )
 
-            if not message_ids:
+            if not objects_to_publish.exists():
                 _logger.debug("No objects to publish")
                 self._waiting()
                 return
 
             self.start()
 
-            # Process each message individually with its own lock
-            for message_id in message_ids:
-                with transaction.atomic():
-                    # Lock the specific message for processing
-                    message = self.published_class.objects.select_for_update().get(id=message_id)
+            with transaction.atomic():
+                published = objects_to_publish.select_for_update(skip_locked=True).iterator(
+                    chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE
+                )
 
-                    # Double-check status in case another worker processed it
+                for message in published:
+                    message_id = message.id
+
+                    # Double-check status in case another worker processed it between queries
                     if message.status != StatusChoice.SCHEDULE:
                         continue
 
