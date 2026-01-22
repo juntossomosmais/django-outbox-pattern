@@ -191,6 +191,24 @@ This generates the following data to be sent.
 Published(destination='/topic/my_route_key_1', body='{"id": 1, "one": "Field One"}')
 Published(destination='/topic/my_route_key_2', body='{"id": 1, "two": "Field Two"}')
 ```
+## Stopping Publication
+
+The `@publish` decorator adds a named parameter called `stop` to the `save` method, which is useful when you need to update an instance of a decorated model and do not want this update to be published on the broker.
+```python
+from django.db import transaction
+from django_outbox_pattern.payloads import Payload
+
+from .models import Order
+
+def callback(payload: Payload):
+    order_id = payload.body["order_id"]
+    status = payload.body["status"]
+    with transaction.atomic():
+        order = Order.objects.get(order_id=order_id)
+        order.status = status
+        order.save(stop=True)
+        payload.save()
+```
 
 ## Publish/Subscribe commands
 
