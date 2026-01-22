@@ -133,7 +133,7 @@ class Producer(Base):
                         _logger.exception("Exceeded send attempts")
                         message.retry = exc.attempts
                         message.status = StatusChoice.FAILED
-                        message.expires_at = timezone.now() + timedelta(minutes=15)
+                        message.expires_at = timezone.now() + timedelta(15)
                         _logger.info(f"Message no published with id: {message_id}")
                     else:
                         message.retry = attempts
