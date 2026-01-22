@@ -7,6 +7,7 @@ from time import sleep
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import DatabaseError
+from django.db import transaction
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from stomp.exception import StompException
@@ -103,30 +104,43 @@ class Producer(Base):
             objects_to_publish = self.published_class.objects.filter(
                 status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
             )
+
             if not objects_to_publish.exists():
                 _logger.debug("No objects to publish")
                 self._waiting()
                 return
 
-            published = objects_to_publish.iterator(chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE)
             self.start()
-            for message in published:
-                message_id = message.id
-                _logger.debug("Message to published with body: %s", message.body)
-                try:
-                    attempts = self.send(message)
-                except ExceededSendAttemptsException as exc:
-                    _logger.exception("Exceeded send attempts")
-                    message.retry = exc.attempts
-                    message.status = StatusChoice.FAILED
-                    message.expires_at = timezone.now() + timedelta(15)
-                    _logger.info(f"Message no published with id: {message_id}")
-                else:
-                    message.retry = attempts
-                    message.status = StatusChoice.SUCCEEDED
-                    _logger.info(f"Message published with id: {message_id}")
-                finally:
-                    message.save()
+
+            with transaction.atomic():
+                published = objects_to_publish.select_for_update(skip_locked=True).iterator(
+                    chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE
+                )
+
+                for message in published:
+                    message_id = message.id
+
+                    # Double-check status in case another worker processed it between queries
+                    if message.status != StatusChoice.SCHEDULE:
+                        continue
+
+                    _logger.debug("Message to published with body: %s", message.body)
+
+                    try:
+                        attempts = self.send(message)
+                    except ExceededSendAttemptsException as exc:
+                        _logger.exception("Exceeded send attempts")
+                        message.retry = exc.attempts
+                        message.status = StatusChoice.FAILED
+                        message.expires_at = timezone.now() + timedelta(15)
+                        _logger.info(f"Message no published with id: {message_id}")
+                    else:
+                        message.retry = attempts
+                        message.status = StatusChoice.SUCCEEDED
+                        _logger.info(f"Message published with id: {message_id}")
+                    finally:
+                        message.save()
+
             self.stop()
         except DatabaseError:
             _logger.info("Starting publisher 🤔.")
