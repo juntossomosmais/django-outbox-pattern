@@ -33,7 +33,7 @@ class PublishCommandTest(TestCase):
 
     def test_command_on_database_error(self):
         mock_published_class = MagicMock()
-        mock_published_class.objects.select_for_update.side_effect = DatabaseError()
+        mock_published_class.objects.filter.side_effect = DatabaseError()
         with patch.object(Command.producer, "published_class", mock_published_class):
             with self.assertLogs("django_outbox_pattern", level="INFO") as cm:
                 call_command("publish")

@@ -121,13 +121,12 @@ class Producer(Base):
 
     def publish_message_from_database(self):
         try:
-            # Fetch message IDs with row-level locking to prevent race conditions
-            with transaction.atomic():
-                message_ids = list(
-                    self.published_class.objects.select_for_update(skip_locked=True)
-                    .filter(status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now())
-                    .values_list("id", flat=True)[: settings.DEFAULT_PUBLISHED_CHUNK_SIZE]
-                )
+            # Fetch message IDs to identify available messages for processing
+            message_ids = list(
+                self.published_class.objects.filter(
+                    status=StatusChoice.SCHEDULE, expires_at__gte=timezone.now()
+                ).values_list("id", flat=True)[: settings.DEFAULT_PUBLISHED_CHUNK_SIZE]
+            )
 
             if not message_ids:
                 _logger.debug("No objects to publish")
@@ -172,7 +171,4 @@ class Producer(Base):
         except DatabaseError:
             _logger.info("Starting publisher 🤔.")
             # Don't increment empty polls counter on database errors
-            self._waiting()
-        else:
-            # Normal completion - apply adaptive waiting
             self._waiting()

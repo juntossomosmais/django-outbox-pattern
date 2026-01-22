@@ -92,13 +92,6 @@ class ProducerTest(TestCase):
         self.producer.stop()
         self.assertEqual(self.producer.connection.connect.call_count, 0)
 
-    def test_publish_message_from_database_uses_select_for_update_with_skip_locked(self):
-        Published.objects.create(destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE)
-        with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
-            mock_select.return_value.filter.return_value.values_list.return_value.__getitem__.return_value = []
-            self.producer.publish_message_from_database()
-            mock_select.assert_called_with(skip_locked=True)
-
     def test_publish_message_from_database_processes_messages_individually(self):
         message1 = Published.objects.create(
             destination="destination", body={"message": "test1"}, status=StatusChoice.SCHEDULE
@@ -137,19 +130,25 @@ class ProducerRaceConditionTest(TransactionTestCase):
             mock_send.assert_not_called()
 
     def test_concurrent_publishers_cannot_process_same_message(self):
-        Published.objects.create(destination="destination", body={"message": "test1"}, status=StatusChoice.SCHEDULE)
-        Published.objects.create(destination="destination", body={"message": "test2"}, status=StatusChoice.SCHEDULE)
+        message1 = Published.objects.create(
+            destination="destination", body={"message": "test1"}, status=StatusChoice.SCHEDULE
+        )
+        message2 = Published.objects.create(
+            destination="destination", body={"message": "test2"}, status=StatusChoice.SCHEDULE
+        )
 
-        # Mock select_for_update to return empty result (simulating skip_locked behavior)
+        # Mock select_for_update to simulate that another publisher processed the message first
         with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
-            # Simulate that another publisher got the messages first
-            mock_select.return_value.filter.return_value.values_list.return_value.__getitem__.return_value = []
+            # Create a mock message that was already processed
+            mock_message = Mock()
+            mock_message.status = StatusChoice.SUCCEEDED  # Already processed
+            mock_select.return_value.get.return_value = mock_message
 
             with patch.object(self.producer, "send") as mock_send:
                 self.producer.publish_message_from_database()
-                # Verify skip_locked=True was used (prevents concurrent access)
-                mock_select.assert_called_with(skip_locked=True)
-                # No messages should be sent since they were locked by other publishers
+                # Verify select_for_update was used for individual message processing
+                mock_select.assert_called()
+                # No messages should be sent since they were already processed
                 mock_send.assert_not_called()
 
     def test_adaptive_waiting_strategy(self):
@@ -181,10 +180,10 @@ class ProducerRaceConditionTest(TransactionTestCase):
         # Start with no empty polls
         self.assertEqual(self.producer._consecutive_empty_polls, 0)
 
-        # Mock to simulate no messages found
-        with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
+        # Mock to simulate no messages found in the initial fetch
+        with patch.object(self.producer.published_class.objects, "filter") as mock_filter:
             with patch("django_outbox_pattern.producers.sleep"):
-                mock_select.return_value.filter.return_value.values_list.return_value.__getitem__.return_value = []
+                mock_filter.return_value.values_list.return_value.__getitem__.return_value = []
 
                 # First empty poll
                 self.producer.publish_message_from_database()
@@ -203,3 +202,21 @@ class ProducerRaceConditionTest(TransactionTestCase):
 
         # Counter should be reset to 0 after processing messages
         self.assertEqual(self.producer._consecutive_empty_polls, 0)
+
+    def test_individual_message_locking_uses_select_for_update(self):
+        """Test that select_for_update is used when fetching individual messages for processing"""
+        message = Published.objects.create(
+            destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE
+        )
+
+        with patch.object(self.producer.published_class.objects, "select_for_update") as mock_select:
+            # Setup mock chain for select_for_update().get()
+            mock_select.return_value.get.return_value = message
+
+            with patch.object(self.producer, "send", return_value=0):
+                self.producer.publish_message_from_database()
+
+            # Verify select_for_update was called
+            mock_select.assert_called_once_with()
+            # Verify get was called with the message ID
+            mock_select.return_value.get.assert_called_once_with(id=message.id)
