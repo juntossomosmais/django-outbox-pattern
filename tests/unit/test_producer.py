@@ -109,6 +109,31 @@ class ProducerTest(TestCase):
         self.assertEqual(message1.status, StatusChoice.SUCCEEDED)
         self.assertEqual(message2.status, StatusChoice.SUCCEEDED)
 
+    def test_publish_message_from_database_respects_chunk_size(self):
+        """Test that only DEFAULT_PUBLISHED_CHUNK_SIZE messages are processed per call"""
+        # Create 5 messages
+        messages = []
+        for i in range(5):
+            message = Published.objects.create(
+                destination="destination", body={"message": f"test{i}"}, status=StatusChoice.SCHEDULE
+            )
+            messages.append(message)
+
+        with patch("django_outbox_pattern.settings.DEFAULT_PUBLISHED_CHUNK_SIZE", 3):
+            with patch.object(self.producer, "send", return_value=0) as mock_send:
+                self.producer.publish_message_from_database()
+
+        # Only 3 messages should be processed
+        self.assertEqual(mock_send.call_count, 3)
+
+        # Verify exactly 3 messages are now SUCCEEDED
+        processed_count = Published.objects.filter(status=StatusChoice.SUCCEEDED).count()
+        self.assertEqual(processed_count, 3)
+
+        # Verify 2 messages are still SCHEDULE (pending)
+        pending_count = Published.objects.filter(status=StatusChoice.SCHEDULE).count()
+        self.assertEqual(pending_count, 2)
+
 
 class ProducerRaceConditionTest(TransactionTestCase):
     def setUp(self):

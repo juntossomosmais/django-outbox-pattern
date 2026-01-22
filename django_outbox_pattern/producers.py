@@ -145,5 +145,6 @@ class Producer(Base):
             self.stop()
         except DatabaseError:
             _logger.info("Starting publisher 🤔.")
-            # Don't increment empty polls counter on database errors
+            self._waiting()
+        else:
             self._waiting()
