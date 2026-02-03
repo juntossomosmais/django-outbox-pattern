@@ -460,3 +460,84 @@ DJANGO_OUTBOX_PATTERN = {
 The `DEFAULT_PRODUCER_WAITING_TIME` variable controls the waiting time in seconds for the producer to check for new
 messages to be sent.
 Default: 1 second
+
+**DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT**
+
+The `DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT` variable controls the maximum time in seconds that the consumer will wait for
+in-flight message processing to complete during graceful shutdown. This is critical for containerized environments
+(Docker, Kubernetes) to ensure messages are processed before the container is forcefully terminated.
+
+When set to `None`, the consumer waits indefinitely for message processing to complete.
+
+When set to a numeric value (seconds), the consumer will:
+1. Stop accepting new messages (unsubscribe from queue)
+2. Wait up to the specified timeout for the current message to finish processing
+3. If timeout is reached, log a warning and proceed with shutdown (message will be redelivered)
+4. Clean up connections and exit gracefully
+
+Default: `90` seconds
+
+**Important for Kubernetes/Docker deployments:**
+
+To ensure graceful shutdown in containerized environments, configure this value to be **less than** your container's
+termination grace period, leaving a buffer for cleanup operations:
+
+```python
+# settings.py
+DJANGO_OUTBOX_PATTERN = {
+    # ... other options ...
+    "DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT": 115,  # seconds
+}
+```
+
+**Kubernetes deployment example:**
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120  # Total time before SIGKILL
+      containers:
+      - name: consumer
+        image: your-image
+        # Use array form to ensure Python receives signals (runs as PID 1)
+        command: ["python"]
+        args: ["manage.py", "subscribe", "callback", "destination"]
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "your_project.settings"
+```
+
+**Signal handling:**
+
+The consumer handles the following signals for graceful shutdown:
+- `SIGTERM`: Sent by Kubernetes/Docker on pod termination
+- `SIGINT`: Sent by Ctrl+C in terminal
+- `SIGQUIT`: Graceful shutdown signal
+
+If a second signal is received during shutdown, the process will exit immediately (force quit).
+
+**Best practices:**
+- Set `DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT` to accommodate your longest expected message processing time
+- Ensure `DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT` < `terminationGracePeriodSeconds` (leave 5-10 second buffer)
+- Use array-form command in container definitions to ensure Python runs as PID 1 and receives signals
+- Monitor logs for timeout warnings to identify messages that exceed processing expectations
+
+**Example timeline (with 90-second message processing):**
+
+```
+T=0s:   SIGTERM received
+T=0s:   Unsubscribe from queue (no new messages accepted)
+T=0s:   Wait up to 115 seconds for message processing
+T=90s:  Message processing completes
+T=90s:  Shutdown thread pool executor
+T=90s:  Disconnect from broker
+T=90s:  Process exits cleanly ✓
+```
+
+If message processing exceeds the timeout, the process will exit and the message will be redelivered when the consumer
+restarts.
