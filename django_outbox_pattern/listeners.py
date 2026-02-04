@@ -21,6 +21,9 @@ class BaseListener(ConnectionListener):
 
 class ConsumerListener(BaseListener):
     def on_disconnected(self):
+        if self.instance._shutting_down:
+            _logger.debug("Consumer disconnected during graceful shutdown, skipping reconnect")
+            return
         _logger.debug("Consumer disconnected")
         self.instance.start(self.instance.callback, self.instance.destination, self.instance.queue_name)
 

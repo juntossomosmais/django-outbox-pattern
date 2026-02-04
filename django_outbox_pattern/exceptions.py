@@ -3,3 +3,4 @@ class ExceededSendAttemptsException(Exception):
 
     def __init__(self, attempts):
         self.attempts = attempts
+        super().__init__(f"Exceeded send attempts: {attempts}")

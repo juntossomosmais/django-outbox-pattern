@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -56,6 +57,9 @@ class Consumer(Base):
         # Background processing controls
         self._should_process_msg_on_background = settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND
         self._pool_executor = self._create_new_worker_executor()
+        self._shutting_down = False
+        self._processing_event = threading.Event()
+        self._processing_event.set()  # Initially idle
         self.set_listener(self.listener_name, self.listener_class(self))
 
     def _create_new_worker_executor(self):
@@ -65,6 +69,9 @@ class Consumer(Base):
         )
 
     def handle_incoming_message(self, body, headers):
+        if self._shutting_down:
+            _logger.warning("Received message during shutdown, skipping (will be redelivered)")
+            return
         if self._should_process_msg_on_background:
             self._submit_task_to_worker_pool(body, headers)
         else:
@@ -74,11 +81,15 @@ class Consumer(Base):
         try:
             self._pool_executor.submit(self.message_handler, body, headers)
         except RuntimeError:
+            if self._shutting_down:
+                _logger.warning("Worker pool was shutdown during graceful shutdown, discarding message")
+                return
             _logger.warning("Worker pool was shutdown!")
             self._pool_executor = self._create_new_worker_executor()
             self._pool_executor.submit(self.message_handler, body, headers)
 
     def message_handler(self, body, headers):
+        self._processing_event.clear()
         local_threading.request_id = _get_or_create_correlation_id(headers)
         try:
             body = json.loads(body)
@@ -92,6 +103,7 @@ class Consumer(Base):
             db.close_old_connections()
             _logger.info(f"Message with msg_id: {message_id} already exists. discarding the message")
             payload.ack()
+            self._processing_event.set()
             return
 
         received = self.received_class(body=body, headers=headers, msg_id=message_id)
@@ -120,6 +132,7 @@ class Consumer(Base):
             finally:
                 db.close_old_connections()
             local_threading.request_id = None
+            self._processing_event.set()
 
     def start(self, callback, destination, queue_name=None):
         self.connect()
@@ -131,17 +144,34 @@ class Consumer(Base):
         _logger.info("Consumer started with id: %s", self.subscribe_id)
 
     def stop(self):
-        if self.subscribe_id and self.is_connected():
-            self._unsubscribe()
-            self.remove_listener(self.listener_name)
-            self._disconnect()
+        self._shutting_down = True
+
+        shutdown_timeout = settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT
+        processing_completed = True
+        if shutdown_timeout is not None:
+            _logger.info("Waiting up to %s seconds for message processing to complete", shutdown_timeout)
+            processing_completed = self._processing_event.wait(timeout=shutdown_timeout)
+            if not processing_completed:
+                _logger.warning(
+                    "Message processing did not complete within %s seconds. "
+                    "Proceeding with shutdown (message may be redelivered)",
+                    shutdown_timeout,
+                )
         else:
-            _logger.info("Consumer not started")
+            _logger.info("Waiting indefinitely for message processing to complete")
+            self._processing_event.wait()
 
         try:
-            self._pool_executor.shutdown(wait=True)
+            self._pool_executor.shutdown(wait=processing_completed, cancel_futures=not processing_completed)
         except Exception:
             pass
+
+        if self.subscribe_id and self.is_connected():
+            self._unsubscribe()
+
+        if self.is_connected():
+            self.remove_listener(self.listener_name)
+            self._disconnect()
 
     def _create_dlq_queue(self, destination, headers, queue_name=None):
         if not self.subscribe_id:

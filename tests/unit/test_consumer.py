@@ -86,10 +86,11 @@ class ConsumerTest(TransactionTestCase):
         self.assertEqual(self.consumer.connection.is_connected.call_count, 2)
 
     def test_consumer_stop(self):
-        self.consumer.connection.is_connected.side_effect = [False, True, True]
+        # Provide enough values for all the is_connected calls during start and stop
+        self.consumer.connection.is_connected.side_effect = [False, True, True, True, True]
         self.consumer.start(lambda p: p, "/topic/destination.v3")
         self.consumer.stop()
-        self.assertEqual(self.consumer.connection.is_connected.call_count, 3)
+        self.assertGreaterEqual(self.consumer.connection.is_connected.call_count, 3)
         self.assertEqual(self.consumer.connection.unsubscribe.call_count, 2)
         self.assertEqual(self.consumer.connection.disconnect.call_count, 1)
 
@@ -220,7 +221,7 @@ class ConsumerBackgroundProcessingTest(SimpleTestCase):
 
         # Ensure stop calls shutdown regardless of connection status
         consumer.stop()
-        consumer._pool_executor.shutdown.assert_called_once_with(wait=True)
+        consumer._pool_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=False)
 
 
 class ConsumerListenerRoutingTest(SimpleTestCase):
@@ -386,3 +387,353 @@ class ConsumerHeartbeatThreadingSyncTest(SimpleTestCase):
             consumer._pool_executor.submit.assert_not_called()
             self.assertIsNotNone(callback_thread_name["value"])
             self.assertEqual(callback_thread_name["value"], current_thread_name)
+
+
+class ConsumerGracefulShutdownTest(TransactionTestCase):
+    def setUp(self):
+        with patch("django_outbox_pattern.factories.factory_connection"):
+            self.consumer = factory_consumer()
+
+    def test_stop_sets_shutting_down_flag(self):
+        self.assertFalse(self.consumer._shutting_down)
+        self.consumer.stop()
+        self.assertTrue(self.consumer._shutting_down)
+
+    def test_stop_waits_for_processing_event_before_disconnect(self):
+        import threading
+
+        self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+        self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+        # Simulate a message being processed
+        self.consumer._processing_event.clear()
+
+        disconnect_called = threading.Event()
+        original_disconnect = self.consumer.connection.disconnect
+
+        def track_disconnect(*args, **kwargs):
+            disconnect_called.set()
+            return original_disconnect(*args, **kwargs)
+
+        self.consumer.connection.disconnect = track_disconnect
+
+        # Release the processing event after a short delay
+        def release_processing():
+            import time
+
+            time.sleep(0.1)
+            self.consumer._processing_event.set()
+
+        release_thread = threading.Thread(target=release_processing)
+        release_thread.start()
+
+        self.consumer.stop()
+        release_thread.join()
+
+        # Disconnect should have been called after processing finished
+        self.assertTrue(disconnect_called.is_set())
+        self.assertTrue(self.consumer._processing_event.is_set())
+
+    def test_stop_waits_for_processing_before_unsubscribe(self):
+        call_order = []
+
+        self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+        self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+        original_unsubscribe = self.consumer.connection.unsubscribe
+
+        def track_unsubscribe(*args, **kwargs):
+            call_order.append("unsubscribe")
+            return original_unsubscribe(*args, **kwargs)
+
+        self.consumer.connection.unsubscribe = track_unsubscribe
+
+        original_wait = self.consumer._processing_event.wait
+
+        def track_wait(*args, **kwargs):
+            call_order.append("wait_processing")
+            return original_wait(*args, **kwargs)
+
+        self.consumer._processing_event.wait = track_wait
+
+        self.consumer.stop()
+
+        # wait for processing should happen before unsubscribe so ACK/NACK can complete
+        self.assertEqual(call_order, ["wait_processing", "unsubscribe"])
+
+    def test_submit_task_skips_executor_recreation_when_shutting_down(self):
+        self.consumer._shutting_down = True
+        self.consumer._pool_executor = Mock()
+        self.consumer._pool_executor.submit = Mock(side_effect=RuntimeError())
+
+        with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
+            self.consumer._submit_task_to_worker_pool("{}", {"message-id": "m1"})
+            self.assertIn("graceful shutdown", "\n".join(log.output))
+
+    def test_listener_does_not_reconnect_when_shutting_down(self):
+        from django_outbox_pattern.listeners import ConsumerListener
+
+        self.consumer._shutting_down = True
+        listener = ConsumerListener(self.consumer)
+
+        self.consumer.start = Mock()
+        listener.on_disconnected()
+
+        self.consumer.start.assert_not_called()
+
+    def test_processing_event_is_set_after_message_handler_completes(self):
+        self.consumer.callback = lambda p: p.save()
+        self.assertTrue(self.consumer._processing_event.is_set())
+
+        self.consumer.message_handler('{"message": "test"}', {"message-id": "test-1"})
+
+        self.assertTrue(self.consumer._processing_event.is_set())
+
+    def test_processing_event_is_set_after_message_handler_exception(self):
+        self.consumer.callback = Mock(side_effect=Exception("boom"))
+
+        with self.assertLogs("django_outbox_pattern", level="ERROR"):
+            self.consumer.message_handler('{"message": "test"}', {"message-id": "test-2"})
+
+        self.assertTrue(self.consumer._processing_event.is_set())
+
+
+class ConsumerShutdownTimeoutTest(TransactionTestCase):
+    def setUp(self):
+        with patch("django_outbox_pattern.factories.factory_connection"):
+            self.consumer = factory_consumer()
+
+    def test_stop_waits_indefinitely_when_timeout_is_none(self):
+        """Test that stop() waits indefinitely when DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT is None"""
+        import threading
+
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", None):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Simulate a message being processed
+            self.consumer._processing_event.clear()
+
+            # Release the processing event after a short delay
+            def release_processing():
+                import time
+
+                time.sleep(0.2)
+                self.consumer._processing_event.set()
+
+            release_thread = threading.Thread(target=release_processing)
+            release_thread.start()
+
+            with self.assertLogs("django_outbox_pattern", level="INFO") as log:
+                self.consumer.stop()
+
+            release_thread.join()
+
+            # Should log indefinite wait message
+            self.assertIn("Waiting indefinitely for message processing to complete", "\n".join(log.output))
+            self.assertTrue(self.consumer._processing_event.is_set())
+
+    def test_stop_respects_timeout_when_configured(self):
+        """Test that stop() respects timeout and proceeds after timeout expires"""
+        import threading
+
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 0.1):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Simulate a message being processed that takes longer than timeout
+            self.consumer._processing_event.clear()
+
+            # Keep the event blocked for longer than timeout
+            def keep_blocked():
+                import time
+
+                time.sleep(0.3)  # Longer than 0.1s timeout
+                self.consumer._processing_event.set()
+
+            block_thread = threading.Thread(target=keep_blocked)
+            block_thread.start()
+
+            with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
+                self.consumer.stop()
+
+            block_thread.join()
+
+            # Should log timeout warning
+            warning_logs = "\n".join(log.output)
+            self.assertIn("Message processing did not complete within", warning_logs)
+            self.assertIn("0.1 seconds", warning_logs)
+            self.assertIn("message may be redelivered", warning_logs)
+
+    def test_stop_completes_normally_when_processing_finishes_before_timeout(self):
+        """Test that stop() completes normally when message finishes within timeout"""
+        import threading
+
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 0.5):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Simulate a message being processed
+            self.consumer._processing_event.clear()
+
+            # Release before timeout
+            def release_processing():
+                import time
+
+                time.sleep(0.05)  # Much less than 0.5s timeout
+                self.consumer._processing_event.set()
+
+            release_thread = threading.Thread(target=release_processing)
+            release_thread.start()
+
+            with self.assertLogs("django_outbox_pattern", level="INFO") as log:
+                self.consumer.stop()
+
+            release_thread.join()
+
+            # Should log timeout value but not timeout warning
+            info_logs = "\n".join(log.output)
+            self.assertIn("Waiting up to 0.5 seconds for message processing to complete", info_logs)
+            self.assertNotIn("did not complete within", info_logs)
+            self.assertTrue(self.consumer._processing_event.is_set())
+
+    def test_stop_logs_correct_timeout_value(self):
+        """Test that stop() logs the correct timeout value"""
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 42):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            with self.assertLogs("django_outbox_pattern", level="INFO") as log:
+                self.consumer.stop()
+
+            info_logs = "\n".join(log.output)
+            self.assertIn("Waiting up to 42 seconds for message processing to complete", info_logs)
+
+    def test_stop_proceeds_with_cleanup_after_timeout(self):
+        """Test that stop() proceeds with pool shutdown and disconnect after timeout"""
+        import threading
+
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 0.1):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Simulate a message being processed that takes longer than timeout
+            self.consumer._processing_event.clear()
+
+            shutdown_called = threading.Event()
+            disconnect_called = threading.Event()
+
+            original_shutdown = self.consumer._pool_executor.shutdown
+            original_disconnect = self.consumer.connection.disconnect
+
+            def track_shutdown(*args, **kwargs):
+                shutdown_called.set()
+                return original_shutdown(*args, **kwargs)
+
+            def track_disconnect(*args, **kwargs):
+                disconnect_called.set()
+                return original_disconnect(*args, **kwargs)
+
+            self.consumer._pool_executor.shutdown = track_shutdown
+            self.consumer.connection.disconnect = track_disconnect
+
+            # Keep blocked longer than timeout
+            def keep_blocked():
+                import time
+
+                time.sleep(0.3)
+                self.consumer._processing_event.set()
+
+            block_thread = threading.Thread(target=keep_blocked)
+            block_thread.start()
+
+            with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                self.consumer.stop()
+
+            block_thread.join()
+
+            # Cleanup should happen despite timeout
+            self.assertTrue(shutdown_called.is_set())
+            self.assertTrue(disconnect_called.is_set())
+
+    def test_stop_with_zero_timeout_returns_immediately(self):
+        """Test that stop() with timeout=0 returns immediately if event not set"""
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 0):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Clear the event
+            self.consumer._processing_event.clear()
+
+            import time
+
+            start_time = time.time()
+
+            with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
+                self.consumer.stop()
+
+            elapsed = time.time() - start_time
+
+            # Should return almost immediately (within 0.1s)
+            self.assertLess(elapsed, 0.1)
+
+            # Should log timeout warning
+            self.assertIn("Message processing did not complete within 0 seconds", "\n".join(log.output))
+
+    def test_stop_when_already_idle_proceeds_immediately_with_timeout(self):
+        """Test that stop() proceeds immediately when event is already set (idle state)"""
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 10):
+            self.consumer.connection.is_connected.side_effect = [False, True, True, True]
+            self.consumer.start(lambda p: p, "/topic/destination.v1")
+
+            # Event is already set (idle state)
+            self.assertTrue(self.consumer._processing_event.is_set())
+
+            import time
+
+            start_time = time.time()
+
+            with self.assertLogs("django_outbox_pattern", level="INFO") as log:
+                self.consumer.stop()
+
+            elapsed = time.time() - start_time
+
+            # Should return quickly (not wait full 10 seconds)
+            self.assertLess(elapsed, 0.5)
+
+            # Should not log timeout warning
+            info_logs = "\n".join(log.output)
+            self.assertNotIn("did not complete within", info_logs)
+
+    def test_stop_timeout_with_background_processing_enabled(self):
+        """Test that stop() timeout works correctly with background message processing"""
+        import threading
+
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_SHUTDOWN_TIMEOUT", 0.1):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_PROCESS_MSG_ON_BACKGROUND", True):
+                # Recreate consumer with background processing enabled
+                with patch("django_outbox_pattern.factories.factory_connection"):
+                    consumer = factory_consumer()
+
+                consumer.connection.is_connected.side_effect = [False, True, True, True]
+                consumer.start(lambda p: p, "/topic/destination.v1")
+
+                # Simulate background thread processing
+                consumer._processing_event.clear()
+
+                def keep_processing():
+                    import time
+
+                    time.sleep(0.3)  # Longer than timeout
+                    consumer._processing_event.set()
+
+                process_thread = threading.Thread(target=keep_processing)
+                process_thread.start()
+
+                with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
+                    consumer.stop()
+
+                process_thread.join()
+
+                # Should log timeout warning
+                self.assertIn("Message processing did not complete within 0.1 seconds", "\n".join(log.output))

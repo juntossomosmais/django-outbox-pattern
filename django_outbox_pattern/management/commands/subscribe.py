@@ -1,7 +1,7 @@
 import logging
-import sys
-
-from time import sleep
+import os
+import signal
+import threading
 
 from django.core.management.base import BaseCommand
 from django.core.management.base import CommandError
@@ -22,7 +22,12 @@ def _import_from_string(value):
 
 class Command(BaseCommand):
     help = "Subscribe command"
-    running = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.running = True
+        self._stop_event = threading.Event()
+        self._shutdown_initiated = False
 
     def add_arguments(self, parser):
         parser.add_argument("callback", help="A dotted module path with the function to process messages")
@@ -34,18 +39,39 @@ class Command(BaseCommand):
         destination = options.get("destination")
         queue_name = options.get("queue_name")
         consumer = factory_consumer()
+
+        self._register_signal_handlers()
+
         try:
             self._start(consumer, callback, destination, queue_name)
         except KeyboardInterrupt:
-            consumer.stop()
-            self._exit()
+            _logger.info("Received KeyboardInterrupt, initiating graceful shutdown...")
+            self.running = False
+            self._stop_event.set()
 
-    def _exit(self):
-        _logger.info("\nI'm not waiting for messages anymore 🥲!")
-        sys.exit(0)
+        _logger.info("Stopping consumer gracefully")
+        consumer.stop()
+        _logger.info("Consumer stopped")
+
+    def _register_signal_handlers(self):
+        def _shutdown_handler(signum, frame):
+            sig_name = signal.Signals(signum).name
+
+            if self._shutdown_initiated:
+                _logger.warning("Received %s during shutdown. Forcing immediate exit...", sig_name)
+                os._exit(1)
+
+            _logger.info("Received %s, initiating graceful shutdown...", sig_name)
+            self._shutdown_initiated = True
+            self.running = False
+            self._stop_event.set()
+
+        signal.signal(signal.SIGQUIT, _shutdown_handler)
+        signal.signal(signal.SIGTERM, _shutdown_handler)
+        signal.signal(signal.SIGINT, _shutdown_handler)
 
     def _start(self, consumer, callback, destination, queue_name):
         consumer.start(callback, destination, queue_name)
-        _logger.info("Waiting for messages to be consume 😋")
+        _logger.info("Waiting for messages to be consumed...")
         while self.running and consumer.is_connected():
-            sleep(1)
+            self._stop_event.wait(timeout=1)
