@@ -50,6 +50,19 @@ class ProducerTest(TestCase):
         self.assertTrue(published.headers is not None)
         self.assertEqual(published.headers["key"], headers["key"])
 
+    def test_producer_send_should_preserve_custom_correlation_id_over_thread_local(self):
+        local_threading.request_id = str(uuid4())
+        published = Published.objects.create(
+            destination="destination",
+            body={"message": "Message test"},
+            headers={"dop-correlation-id": "custom-id"},
+        )
+        self.producer.start()
+        self.producer.send(published)
+        self.producer.stop()
+        self.assertEqual(self.producer.connection.send.call_count, 1)
+        self.assertEqual(published.headers["dop-correlation-id"], "custom-id")
+
     def test_producer_send_event(self):
         self.producer.start()
         self.producer.send_event(destination="destination", body={"message": "Test send event"})
