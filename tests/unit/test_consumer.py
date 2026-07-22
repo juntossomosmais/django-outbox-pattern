@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 from uuid import uuid4
 
+from django.db import OperationalError
 from django.db import transaction
 from django.test import SimpleTestCase
 from django.test import TransactionTestCase
@@ -119,6 +120,131 @@ class ConsumerTest(TransactionTestCase):
         self.assertEqual({"message": "my message"}, message.body)
         self.assertEqual({"message-id": 1, "dop-correlation-id": "1234"}, message.headers)
         self.assertEqual("1", message.msg_id)
+        self.assertIsNone(local_threading.request_id)
+
+
+class ConsumerRetryOnOperationalErrorTest(TransactionTestCase):
+    def setUp(self):
+        with patch("django_outbox_pattern.factories.factory_connection"):
+            self.consumer = factory_consumer()
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_ack_given_operational_error_that_recovers_on_retry(self, _sleep):
+        calls = {"count": 0}
+
+        def callback(payload: Payload):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise OperationalError("db is temporarily down")
+            payload.save()
+
+        self.consumer.callback = callback
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS", 3):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_RETRY_WAIT", 0):
+                with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                    self.consumer.message_handler('{"message": "test"}', {"message-id": 1})
+
+        self.assertEqual(calls["count"], 2)
+        self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
+        self.assertEqual(self.consumer.connection.ack.call_count, 1)
+        self.assertEqual(self.consumer.connection.nack.call_count, 0)
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_nack_given_operational_error_that_exceeds_max_retries(self, _sleep):
+        self.consumer.callback = Mock(side_effect=OperationalError("db is down"))
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS", 3):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_RETRY_WAIT", 0):
+                with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                    self.consumer.message_handler('{"message": "test"}', {"message-id": 2})
+
+        # 1 initial call + 3 retries
+        self.assertEqual(self.consumer.callback.call_count, 4)
+        self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 0)
+        self.assertEqual(self.consumer.connection.nack.call_count, 1)
+        self.assertEqual(self.consumer.connection.ack.call_count, 0)
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_nack_without_retry_given_generic_exception(self, sleep_mock):
+        self.consumer.callback = Mock(side_effect=ValueError("boom"))
+        with self.assertLogs("django_outbox_pattern", level="ERROR"):
+            self.consumer.message_handler('{"message": "test"}', {"message-id": 3})
+
+        self.consumer.callback.assert_called_once()
+        self.assertEqual(self.consumer.connection.nack.call_count, 1)
+        sleep_mock.assert_not_called()
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_retry_given_operational_error_during_idempotency_check(self, _sleep):
+        self.consumer.callback = lambda p: p.save()
+        real_filter = self.consumer.received_class.objects.filter
+        calls = {"count": 0}
+
+        def flaky_filter(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                broken_queryset = Mock()
+                broken_queryset.exists = Mock(side_effect=OperationalError("db is down"))
+                return broken_queryset
+            return real_filter(*args, **kwargs)
+
+        with patch.object(self.consumer.received_class.objects, "filter", side_effect=flaky_filter):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS", 3):
+                with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_RETRY_WAIT", 0):
+                    with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                        self.consumer.message_handler('{"message": "test"}', {"message-id": "idem-check-1"})
+
+        self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
+        self.assertEqual(self.consumer.connection.ack.call_count, 1)
+        self.assertEqual(self.consumer.connection.nack.call_count, 0)
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_ack_without_reinvoking_callback_when_retry_finds_message_already_persisted(self, _sleep):
+        calls = {"count": 0}
+
+        def callback(payload: Payload):
+            calls["count"] += 1
+            payload.save()
+            if calls["count"] == 1:
+                raise OperationalError("connection dropped after commit")
+
+        self.consumer.callback = callback
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS", 3):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_RETRY_WAIT", 0):
+                with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                    self.consumer.message_handler('{"message": "test"}', {"message-id": "dup-insert-1"})
+
+        self.assertEqual(calls["count"], 1)
+        self.assertEqual(self.consumer.received_class.objects.filter(status=StatusChoice.SUCCEEDED).count(), 1)
+        self.assertEqual(self.consumer.connection.ack.call_count, 1)
+        self.assertEqual(self.consumer.connection.nack.call_count, 0)
+
+    @patch("django_outbox_pattern.consumers.time.sleep")
+    def test_consumer_should_nack_without_further_retries_given_generic_exception_during_retry(self, _sleep):
+        calls = {"count": 0}
+
+        def callback(payload: Payload):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise OperationalError("db is down")
+            raise ValueError("boom during retry")
+
+        self.consumer.callback = callback
+        with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS", 3):
+            with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_RETRY_WAIT", 0):
+                with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                    self.consumer.message_handler('{"message": "test"}', {"message-id": "retry-generic-1"})
+
+        self.assertEqual(calls["count"], 2)
+        self.assertEqual(self.consumer.connection.nack.call_count, 1)
+        self.assertEqual(self.consumer.connection.ack.call_count, 0)
+
+    def test_processing_event_and_request_id_reset_given_operational_error_in_remove_old_messages(self):
+        self.consumer.callback = lambda p: p.save()
+        with patch.object(self.consumer, "_remove_old_messages", side_effect=OperationalError("db is down")):
+            with self.assertLogs("django_outbox_pattern", level="WARNING"):
+                self.consumer.message_handler('{"message": "test"}', {"message-id": "cleanup-1"})
+
+        self.assertTrue(self.consumer._processing_event.is_set())
         self.assertIsNone(local_threading.request_id)
 
 

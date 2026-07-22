@@ -541,3 +541,29 @@ T=90s:  Process exits cleanly ✓
 
 If message processing exceeds the timeout, the process will exit and the message will be redelivered when the consumer
 restarts.
+
+**DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS**
+
+The `DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS` variable controls how many times the consumer will retry the callback when a
+`django.db.OperationalError` is raised during message processing (for example, a transient database or DNS failure).
+Once the attempts are exhausted, the message is negatively acknowledged and sent to the DLQ. Any other exception keeps
+the previous behaviour and is negatively acknowledged immediately, without retrying.
+
+Default: `3`
+
+**DEFAULT_CONSUMER_RETRY_WAIT**
+
+The `DEFAULT_CONSUMER_RETRY_WAIT` variable controls the base wait time in seconds between retries after a
+`django.db.OperationalError`. The backoff is linear: the consumer waits `DEFAULT_CONSUMER_RETRY_WAIT` multiplied by the
+attempt number before each retry (for example, with a wait of `2`: 2s, 4s, 6s).
+
+Default: `2` seconds
+
+```python
+# settings.py
+DJANGO_OUTBOX_PATTERN = {
+    # ... other options ...
+    "DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS": 3,
+    "DEFAULT_CONSUMER_RETRY_WAIT": 2,  # seconds
+}
+```
