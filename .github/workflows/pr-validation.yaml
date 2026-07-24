@@ -1,0 +1,14 @@
+name: "Pull Request Validation"
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  open-source-library-validation:
+    uses: juntossomosmais/github-reusable-workflows/.github/workflows/evaluate-open-source-library-pr.yaml@main
+    secrets:
+      ROBOT_PAT: ${{ secrets.ROBOT_PAT_REUSABLE_WORKFLOWS }}

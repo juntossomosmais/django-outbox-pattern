@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import time
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -8,6 +9,7 @@ from uuid import uuid4
 
 from django import db
 from django.core.cache import cache
+from django.db import OperationalError
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from request_id_django_log import local_threading
@@ -99,22 +101,35 @@ class Consumer(Base):
         payload = Payload(self.connection, body, headers)
         message_id = _get_msg_id(headers)
 
-        if self.received_class.objects.filter(msg_id=message_id).exists():
-            db.close_old_connections()
-            _logger.info(f"Message with msg_id: {message_id} already exists. discarding the message")
-            payload.ack()
-            self._processing_event.set()
-            return
-
-        received = self.received_class(body=body, headers=headers, msg_id=message_id)
-
-        payload.message = received
-
         try:
+            self._process_message_with_retry(payload, body, headers, message_id)
+
+        finally:
+            try:
+                self._remove_old_messages()
+            except OperationalError:
+                _logger.warning("OperationalError while removing old messages, skipping cleanup this cycle")
+            finally:
+                db.close_old_connections()
+            local_threading.request_id = None
+            self._processing_event.set()
+
+    def _process_message_with_retry(self, payload, body, headers, message_id, attempt=0):
+        max_retries = settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS
+        try:
+            if self.received_class.objects.filter(msg_id=message_id).exists():
+                db.close_old_connections()
+                _logger.info("Message with msg_id: %s already exists. discarding the message", message_id)
+                payload.ack()
+                return
+
+            received = self.received_class(body=body, headers=headers, msg_id=message_id)
+            payload.message = received
+
             self.callback(payload)
             if payload.saved:
                 payload.ack()
-            elif not payload.saved or not payload.nacked:
+            elif not payload.nacked:
                 _logger.warning(
                     "The save or nack command was not executed, and the routine finished running "
                     "without receiving an acknowledgement or a negative acknowledgement. "
@@ -122,17 +137,22 @@ class Consumer(Base):
                     message_id,
                 )
 
+        except OperationalError:
+            if attempt >= max_retries:
+                _logger.error("All %s retries exhausted, sending to DLQ, message-id: %s", max_retries, message_id)
+                payload.nack()
+                return
+
+            wait_time = settings.DEFAULT_CONSUMER_RETRY_WAIT * (attempt + 1)
+            _logger.warning("Retry %s/%s failed, retrying in %ss", attempt + 1, max_retries, wait_time)
+            db.close_old_connections()
+            time.sleep(wait_time)
+            retry_payload = Payload(self.connection, body, headers)
+            self._process_message_with_retry(retry_payload, body, headers, message_id, attempt + 1)
+
         except Exception:
             _logger.exception("An exception has been caught during callback processing flow")
             payload.nack()
-
-        finally:
-            try:
-                self._remove_old_messages()
-            finally:
-                db.close_old_connections()
-            local_threading.request_id = None
-            self._processing_event.set()
 
     def start(self, callback, destination, queue_name=None):
         self.connect()

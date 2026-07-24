@@ -35,4 +35,14 @@ class PublishedTest(TransactionTestCase):
         published = Published.objects.create(
             destination="destination", body={"message": "Message test"}, headers={"custom": "xpto-lalala"}
         )
-        self.assertIn("dop-correlation-id", published.headers)
+        self.assertEqual(published.headers["custom"], "xpto-lalala")
+        self.assertEqual(published.headers["dop-correlation-id"], request_id)
+
+    def test_published_should_preserve_custom_correlation_id_given_dop_correlation_id_header(self):
+        local_threading.request_id = str(uuid4())
+        published = Published.objects.create(
+            destination="destination",
+            body={"message": "Message test"},
+            headers={"dop-correlation-id": "custom-id"},
+        )
+        self.assertEqual(published.headers["dop-correlation-id"], "custom-id")

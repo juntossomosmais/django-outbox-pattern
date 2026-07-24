@@ -10,6 +10,8 @@ from request_id_django_log.settings import NO_REQUEST_ID
 
 from django_outbox_pattern import settings
 
+_OVERRIDABLE_DEFAULT_HEADERS = {"dop-correlation-id"}
+
 
 def generate_headers(message):
     correlation_id = current_request_id()
@@ -27,8 +29,11 @@ def generate_headers(message):
 
 def get_message_headers(published):
     default_headers = import_string(settings.DEFAULT_GENERATE_HEADERS)(published)
-    return json.loads(
-        json.dumps(
-            default_headers if not published.headers else published.headers | default_headers, cls=DjangoJSONEncoder
-        )
-    )
+    if not published.headers:
+        merged_headers = default_headers
+    else:
+        merged_headers = default_headers | published.headers
+        for key, value in default_headers.items():
+            if key not in _OVERRIDABLE_DEFAULT_HEADERS:
+                merged_headers[key] = value
+    return json.loads(json.dumps(merged_headers, cls=DjangoJSONEncoder))
