@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 from time import sleep
 
+from django import db
 from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import DatabaseError
@@ -144,6 +145,7 @@ class Producer(Base):
             self.stop()
         except DatabaseError:
             _logger.info("Starting publisher 🤔.")
+            db.close_old_connections()
             self._waiting()
         else:
             self._waiting()

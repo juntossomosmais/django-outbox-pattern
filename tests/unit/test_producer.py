@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 from uuid import uuid4
 
+from django.db import OperationalError
 from django.test import TestCase
 from django.test import TransactionTestCase
 from request_id_django_log import local_threading
@@ -190,3 +191,47 @@ class ProducerRaceConditionTest(TransactionTestCase):
             mock_queryset.select_for_update.return_value.iterator.assert_called_once_with(
                 chunk_size=settings.DEFAULT_PUBLISHED_CHUNK_SIZE
             )
+
+
+class ProducerRecoversFromOperationalErrorTest(TransactionTestCase):
+    def setUp(self):
+        with patch("django_outbox_pattern.factories.factory_connection"):
+            self.producer = factory_producer()
+
+    def test_should_close_old_connections_and_wait_given_operational_error(self):
+        Published.objects.create(destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE)
+
+        with patch.object(self.producer.published_class.objects, "filter", side_effect=OperationalError("db is down")):
+            with patch("django_outbox_pattern.producers.db.close_old_connections") as mock_close_old_connections:
+                with patch.object(self.producer, "_waiting") as mock_waiting:
+                    self.producer.publish_message_from_database()
+
+        mock_close_old_connections.assert_called_once()
+        mock_waiting.assert_called_once()
+
+    def test_should_publish_normally_on_next_iteration_after_operational_error(self):
+        message = Published.objects.create(
+            destination="destination", body={"message": "test"}, status=StatusChoice.SCHEDULE
+        )
+        real_filter = self.producer.published_class.objects.filter
+        calls = {"count": 0}
+
+        def flaky_filter(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise OperationalError("db is temporarily down")
+            return real_filter(*args, **kwargs)
+
+        with patch.object(self.producer.published_class.objects, "filter", side_effect=flaky_filter):
+            with patch("django_outbox_pattern.producers.db.close_old_connections") as mock_close_old_connections:
+                with patch.object(self.producer, "_waiting"):
+                    # First iteration: db is down, connection is discarded
+                    self.producer.publish_message_from_database()
+                    # Second iteration: db is back, publisher recovers without manual intervention
+                    with patch.object(self.producer, "send", return_value=0) as mock_send:
+                        self.producer.publish_message_from_database()
+
+        mock_close_old_connections.assert_called_once()
+        mock_send.assert_called_once()
+        message.refresh_from_db()
+        self.assertEqual(message.status, StatusChoice.SUCCEEDED)

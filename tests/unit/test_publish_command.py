@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.db import DatabaseError
-from django.test import TestCase
+from django.test import TransactionTestCase
 
 from django_outbox_pattern.management.commands.publish import Command
 from django_outbox_pattern.models import Published
@@ -13,7 +13,7 @@ from django_outbox_pattern.models import Published
 PUBLISH_COMMAND_PATH = "django_outbox_pattern.management.commands.publish"
 
 
-class PublishCommandTest(TestCase):
+class PublishCommandTest(TransactionTestCase):
     def setUp(self):
         Command.running = PropertyMock(side_effect=[True, False])
         self.out = StringIO()

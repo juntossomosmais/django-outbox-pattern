@@ -2,6 +2,16 @@
 
 All notable changes to `django-outbox-pattern` will be documented in this file.
 
+## [3.2.1] - 2026-08-25
+
+### Fixes
+
+- Fixed the publisher (`Producer.publish_message_from_database`) getting stuck reusing a broken database connection
+  after a transient `django.db.DatabaseError` (for example, a database or network hiccup). It now calls
+  `django.db.close_old_connections()` before waiting for the next polling iteration, discarding the broken connection
+  so a new one is opened automatically as soon as the database is available again. Previously, the process required a
+  manual restart to recover once the connection broke.
+
 ## [3.2.0] - 2026-07-22
 
 ### Features
