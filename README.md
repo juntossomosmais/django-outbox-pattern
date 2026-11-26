@@ -238,8 +238,9 @@ def send_event(destination, body, headers):
 
 ##### Subscribe command
 
-Consumers created through the library implement the idempotency pattern using the header attribute `message-id`. The
-library configures it as unique in the database. This ensures a given message is only processed once, no matter what.
+Consumers created through the library implement the idempotency pattern using the message id, taken from the first
+header present among `cap-msg-id`, `dop-msg-id` and `message-id`, in this order. The library configures it as unique in
+the database. Messages without any of these headers are not deduplicated. This ensures a given message is only processed once, no matter what.
 To correctly implement this, you must open a transaction with the database to persist the data from your logic and
 execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the
 message is removed from the broker.
@@ -567,3 +568,28 @@ DJANGO_OUTBOX_PATTERN = {
     "DEFAULT_CONSUMER_RETRY_WAIT": 2,  # seconds
 }
 ```
+
+**DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY**
+
+The `extra` key under which consumer logs related to a message carry its id (for example, `Message received`). The
+default is the legacy name `MessageId`. Services whose logging pipeline accepts dotted keys (for example, services that
+write the `jsm.log.schema: v2` route marker) can set it to the OpenTelemetry semantic convention key
+`messaging.message.id`. The value must be a non-empty string that is not a `LogRecord` attribute (such as `message` or
+`levelname`); otherwise the consumer raises `ImproperlyConfigured` on creation.
+
+Default: `MessageId`
+
+```python
+# settings.py
+DJANGO_OUTBOX_PATTERN = {
+    # ... other options ...
+    "DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY": "messaging.message.id",
+}
+```
+
+## Logging
+
+The library logs through the `django_outbox_pattern` logger. Consumer logs related to a message use constant messages
+and carry the message id in the `extra` key configured by `DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY`. The `Message received`
+log is emitted at the start of `Consumer.message_handler`, so tracing instrumentations that wrap that method (such as
+`opentelemetry-instrumentation-django-outbox-pattern`) attach the trace and span ids to it.

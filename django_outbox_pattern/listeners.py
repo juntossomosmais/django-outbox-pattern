@@ -28,10 +28,8 @@ class ConsumerListener(BaseListener):
         self.instance.start(self.instance.callback, self.instance.destination, self.instance.queue_name)
 
     def on_message(self, frame):
-        if self.instance.subscribe_id in frame.headers["subscription"]:
-            _logger.info("Message id received: %s", frame.headers["message-id"])
-            _logger.debug("Message body received: %s", frame.body)
-            _logger.debug("Message headers received: %s", frame.headers)
+        subscribe_id = self.instance.subscribe_id
+        if subscribe_id and subscribe_id in frame.headers["subscription"]:
             self.instance.handle_incoming_message(frame.body, frame.headers)
 
 

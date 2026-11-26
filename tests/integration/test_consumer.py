@@ -133,12 +133,16 @@ class ConsumerTest(TransactionTestCase):
         destination = "/topic/consumer.v5"
         callback = get_callback()
         self.consumer.start(callback, destination)
-        with self.assertRaises(Exception):  # noqa
+        with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
             self.consumer.connection.send(destination=destination, body='{"message": "Message test no raise"}')
+            self.listener.wait_for_message()
             sleep(1)
-            self.listener.get_latest_message()
 
         count_message = Received.objects.all().count()
         self.assertEqual(1, count_message)
+        self.assertIn(
+            "Error while removing old messages, skipping cleanup this cycle", [r.getMessage() for r in log.records]
+        )
+        self.assertTrue(self.consumer._processing_event.is_set())
 
         mock_cache.get.assert_called_once_with(settings.OUTBOX_PATTERN_CONSUMER_CACHE_KEY)
