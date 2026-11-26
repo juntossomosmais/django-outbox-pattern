@@ -23,15 +23,12 @@ from django_outbox_pattern.payloads import Payload
 _logger = logging.getLogger("django_outbox_pattern")
 
 # Attributes every LogRecord already has: using one of them as an `extra` key makes logging raise KeyError.
-_RESERVED_LOG_RECORD_ATTRIBUTES = frozenset(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
+_RESERVED_LOG_RECORD_ATTRIBUTES = (
+    frozenset(logging.makeLogRecord({}).__dict__) | frozenset(dir(logging.LogRecord)) | {"message", "asctime"}
+)
 
 
 def _message_log_extra(message_id):
-    """
-    Builds the log `extra` that carries the message id, under the key configured in
-    DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY (the legacy name `MessageId` by default, or the OpenTelemetry semantic
-    convention key `messaging.message.id` for services whose logging pipeline accepts dotted keys).
-    """
     return {settings.DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY: message_id}
 
 
@@ -58,8 +55,7 @@ def _get_msg_id(headers):
 
 def _parse_body(body, message_id):
     """
-    Decodes the JSON message body. A body that is already a dict or list (e.g. from a custom listener) is returned as
-    is, and a body that cannot be decoded is logged and returned unchanged, so the callback still decides what to do.
+    Returns the decoded body, or the original body when it cannot be decoded.
     """
     if isinstance(body, (dict, list)):
         return body
@@ -135,11 +131,11 @@ class Consumer(Base):
 
     def message_handler(self, body, headers):
         self._processing_event.clear()
+        message_id = None
         try:
             local_threading.request_id = _get_or_create_correlation_id(headers)
             message_id = _get_msg_id(headers)
-            # Logged here rather than in the STOMP listener so the record is emitted inside the span that
-            # tracing instrumentations open around message_handler, in both sync and background modes.
+            # Tracing instrumentations wrap message_handler, so this record is emitted inside the message span.
             _logger.info("Message received", extra=_message_log_extra(message_id))
             body = _parse_body(body, message_id)
 
@@ -151,8 +147,14 @@ class Consumer(Base):
                 try:
                     self._remove_old_messages()
                 # log-score: ignore LOG-ERR-003 - cleanup of old messages is best effort, processing already finished
-                except Exception:
-                    _logger.warning("Error while removing old messages, skipping cleanup this cycle", exc_info=True)
+                except Exception as exc:
+                    # Database outages are expected and would log a traceback for every message, so only the
+                    # unexpected errors carry one.
+                    _logger.warning(
+                        "Error while removing old messages, skipping cleanup this cycle",
+                        exc_info=not isinstance(exc, OperationalError),
+                        extra=_message_log_extra(message_id),
+                    )
                 finally:
                     db.close_old_connections()
             finally:
@@ -162,9 +164,7 @@ class Consumer(Base):
     def _process_message_with_retry(self, payload, body, headers, message_id, attempt=0):
         max_retries = settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS
         try:
-            # Without an id there is nothing to deduplicate on: filtering by NULL would discard every id-less message
-            # after the first one as a duplicate.
-            if message_id is not None and self.received_class.objects.filter(msg_id=message_id).exists():
+            if self.received_class.objects.filter(msg_id=message_id).exists():
                 db.close_old_connections()
                 _logger.info("Message already exists, discarding the message", extra=_message_log_extra(message_id))
                 payload.ack()

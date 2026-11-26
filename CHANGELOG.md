@@ -10,7 +10,7 @@ All notable changes to `django-outbox-pattern` will be documented in this file.
   carry its id. The default is the legacy name `MessageId`, so services keep their current logging pipeline. Services
   whose pipeline accepts dotted keys (for example, services that write the `jsm.log.schema: v2` route marker) can set it
   to the OpenTelemetry semantic convention key `messaging.message.id`. An invalid value (empty, not a string, or a
-  `LogRecord` attribute such as `message`) raises `ImproperlyConfigured` when the consumer is created.
+  `LogRecord` attribute or method such as `message` or `getMessage`) raises `ImproperlyConfigured` when the consumer is created.
 
 ### Changes
 
@@ -47,7 +47,7 @@ All notable changes to `django-outbox-pattern` will be documented in this file.
   | `The save or nack command was not executed, ... message-id: <id>` | `The save or nack command was not executed, ...` |
   | `All <n> retries exhausted, sending to DLQ, message-id: <id>` | `All <n> retries exhausted, sending to DLQ` |
   | `<JSONDecodeError message>` (ERROR) | `Message body is not valid JSON` (WARNING, exception attached) |
-  | `OperationalError while removing old messages, skipping cleanup this cycle` | `Error while removing old messages, skipping cleanup this cycle` (exception attached) |
+  | `OperationalError while removing old messages, skipping cleanup this cycle` | `Error while removing old messages, skipping cleanup this cycle` (exception attached, except for `OperationalError`) |
 
   The texts of `Retry <n>/<max> failed, retrying in <s>s` and of the shutdown and worker pool warnings are unchanged;
   they only gained the message id field.
@@ -58,13 +58,13 @@ All notable changes to `django-outbox-pattern` will be documented in this file.
   or while removing old messages. Previously, such an error could leave the processing flag cleared, which made
   `Consumer.stop()` wait for the whole shutdown timeout (or forever when no timeout is configured), and leave the
   correlation id set on the thread for the next message. Any error while removing old messages (not only
-  `OperationalError`, for example a cache backend outage) is now logged and skipped.
+  `OperationalError`, for example a cache backend outage) is now logged and skipped. The warning carries the message
+  id, and only errors other than `OperationalError` attach the traceback, so a database outage does not log a
+  traceback for every message.
 - A message body that cannot be decoded, including a non-string body (for example `None`) and bytes with invalid UTF-8,
   is now logged and handed to the callback as is. Previously, these raised outside the error handling and the message
   was left unacknowledged until it was redelivered. A body that is already a `dict` or `list` (for example, from a
   custom listener) is now passed to the callback without being decoded.
-- Messages without any id header (`cap-msg-id`, `dop-msg-id` or `message-id`) are no longer discarded as duplicates of
-  the first id-less message stored in the database.
 - The consumer listener now ignores messages that arrive after the consumer unsubscribed, instead of raising
   `TypeError` on the STOMP receiver thread.
 

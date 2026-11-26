@@ -163,6 +163,33 @@ class ConsumerTest(TransactionTestCase):
             self.consumer.message_handler({"message": "decoded"}, {"message-id": "decoded-1"})
         self.assertEqual(received_bodies, [{"message": "decoded"}])
 
+    def test_consumer_message_handler_should_pass_body_as_is_given_already_decoded_list_body(self):
+        received_bodies = []
+
+        def callback(payload):
+            received_bodies.append(payload.body)
+            payload.save()
+
+        self.consumer.callback = callback
+        with self.assertNoLogs("django_outbox_pattern", level="WARNING"):
+            self.consumer.message_handler([{"message": "decoded"}], {"message-id": "decoded-list-1"})
+        self.assertEqual(received_bodies, [[{"message": "decoded"}]])
+        self.assertEqual(
+            self.consumer.received_class.objects.get(msg_id="decoded-list-1").body, [{"message": "decoded"}]
+        )
+
+    def test_consumer_message_handler_should_log_invalid_body_given_too_deeply_nested_body(self):
+        received_bodies = []
+        self.consumer.callback = lambda p: received_bodies.append(p.body)
+        nested_body = "[" * 100_000 + "]" * 100_000
+        with self.assertLogs("django_outbox_pattern", level="WARNING") as captured:
+            self.consumer.message_handler(nested_body, {"message-id": "nested-1"})
+        invalid = _records_with_message(captured.records, "Message body is not valid JSON")
+        self.assertEqual(len(invalid), 1)
+        self.assertIsInstance(invalid[0].exc_info[1], RecursionError)
+        self.assertEqual("nested-1", _logged_message_id(invalid[0]))
+        self.assertEqual(received_bodies, [nested_body])
+
     def test_consumer_message_handler_should_log_message_received_with_message_id_in_extra(self):
         self.consumer.callback = lambda p: p.save()
 
@@ -213,21 +240,6 @@ class ConsumerTest(TransactionTestCase):
 
         received = _records_with_message(log.records, "Message received")
         self.assertEqual(received[0].request_id_at_emit, "corr-1")
-
-    def test_consumer_message_handler_should_process_message_without_any_id_header(self):
-        self.consumer.callback = lambda p: p.save()
-
-        with self.assertLogs("django_outbox_pattern", level="INFO") as log:
-            self.consumer.message_handler('{"message": "first"}', {})
-            self.consumer.message_handler('{"message": "second"}', {})
-
-        received = _records_with_message(log.records, "Message received")
-        self.assertEqual(len(received), 2)
-        self.assertIsNone(_logged_message_id(received[0]))
-        self.assertEqual(len(_records_with_message(log.records, "Message already exists, discarding the message")), 0)
-        self.assertEqual(
-            self.consumer.received_class.objects.filter(msg_id__isnull=True, status=StatusChoice.SUCCEEDED).count(), 2
-        )
 
     def test_consumer_message_handler_should_log_message_received_with_dop_msg_id_over_message_id(self):
         self.consumer.callback = lambda p: p.save()
@@ -291,6 +303,7 @@ class ConsumerTest(TransactionTestCase):
         warnings = _records_with_message(log.records, "Error while removing old messages, skipping cleanup this cycle")
         self.assertEqual(len(warnings), 1)
         self.assertIsInstance(warnings[0].exc_info[1], ConnectionError)
+        self.assertEqual("cleanup-2", _logged_message_id(warnings[0]))
         self.assertTrue(self.consumer._processing_event.is_set())
         self.assertIsNone(local_threading.request_id)
         self.assertEqual(self.consumer.received_class.objects.filter(msg_id="cleanup-2").count(), 1)
@@ -454,8 +467,13 @@ class ConsumerRetryOnOperationalErrorTest(TransactionTestCase):
     def test_processing_event_and_request_id_reset_given_operational_error_in_remove_old_messages(self):
         self.consumer.callback = lambda p: p.save()
         with patch.object(self.consumer, "_remove_old_messages", side_effect=OperationalError("db is down")):
-            with self.assertLogs("django_outbox_pattern", level="WARNING"):
+            with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
                 self.consumer.message_handler('{"message": "test"}', {"message-id": "cleanup-1"})
+
+        warnings = _records_with_message(log.records, "Error while removing old messages, skipping cleanup this cycle")
+        self.assertEqual(len(warnings), 1)
+        self.assertFalse(warnings[0].exc_info)
+        self.assertEqual("cleanup-1", _logged_message_id(warnings[0]))
 
         self.assertTrue(self.consumer._processing_event.is_set())
         self.assertIsNone(local_threading.request_id)
@@ -1230,7 +1248,7 @@ class ConsumerLogMessageIdKeyValidationTest(SimpleTestCase):
         self.addCleanup(connection_patcher.stop)
 
     def test_consumer_should_raise_improperly_configured_given_invalid_log_message_id_key(self):
-        for invalid_key in ("", None, "message", "msg", "asctime", "levelname"):
+        for invalid_key in ("", None, 5, "message", "msg", "asctime", "levelname", "getMessage"):
             with self.subTest(invalid_key=invalid_key):
                 with patch("django_outbox_pattern.settings.DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY", invalid_key):
                     with self.assertRaises(ImproperlyConfigured):

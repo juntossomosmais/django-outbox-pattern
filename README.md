@@ -240,7 +240,7 @@ def send_event(destination, body, headers):
 
 Consumers created through the library implement the idempotency pattern using the message id, taken from the first
 header present among `cap-msg-id`, `dop-msg-id` and `message-id`, in this order. The library configures it as unique in
-the database. Messages without any of these headers are not deduplicated. This ensures a given message is only processed once, no matter what.
+the database. This ensures a given message is only processed once, no matter what.
 To correctly implement this, you must open a transaction with the database to persist the data from your logic and
 execute the `save` method of the `payload` object. Once the code is performed correctly, the library guarantees the
 message is removed from the broker.
@@ -258,6 +258,11 @@ exception during the operation, the `nack` method will be triggered automaticall
 **The same service (code + database) cannot consume the same message even with different consumers.**
 
 Create a function that receives an instance of `django_outbox_pattern.payloads.Payload`
+
+`payload.body` holds the decoded JSON body. When the body cannot be decoded as JSON, the library logs the warning
+`Message body is not valid JSON` and hands the original body to the callback, so `payload.body` may also be a `str`,
+`bytes` or `None`. Validate it before using it, and `nack` the message when it is invalid: saving a body that is not
+JSON serializable fails, and the message is sent to the DLQ.
 
 ```python
 # callbacks.py
@@ -574,8 +579,8 @@ DJANGO_OUTBOX_PATTERN = {
 The `extra` key under which consumer logs related to a message carry its id (for example, `Message received`). The
 default is the legacy name `MessageId`. Services whose logging pipeline accepts dotted keys (for example, services that
 write the `jsm.log.schema: v2` route marker) can set it to the OpenTelemetry semantic convention key
-`messaging.message.id`. The value must be a non-empty string that is not a `LogRecord` attribute (such as `message` or
-`levelname`); otherwise the consumer raises `ImproperlyConfigured` on creation.
+`messaging.message.id`. The value must be a non-empty string that is not a `LogRecord` attribute or method (such
+as `message`, `levelname` or `getMessage`); otherwise the consumer raises `ImproperlyConfigured` on creation.
 
 Default: `MessageId`
 
