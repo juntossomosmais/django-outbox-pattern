@@ -21,6 +21,17 @@ def get_callback(raise_except=False):
     return callback
 
 
+def wait_for_message(listener, timeout=10):
+    """
+    Same as TestListener.wait_for_message, but returns whether a message arrived within the timeout instead of waiting
+    forever.
+    """
+    with listener.message_condition:
+        received = listener.message_condition.wait_for(lambda: listener.message_received, timeout=timeout)
+        listener.message_received = False
+    return received
+
+
 class ConsumerTest(TransactionTestCase):
     def setUp(self):
         self.consumer = factory_consumer()
@@ -133,12 +144,16 @@ class ConsumerTest(TransactionTestCase):
         destination = "/topic/consumer.v5"
         callback = get_callback()
         self.consumer.start(callback, destination)
-        with self.assertRaises(Exception):  # noqa
+        with self.assertLogs("django_outbox_pattern", level="WARNING") as log:
             self.consumer.connection.send(destination=destination, body='{"message": "Message test no raise"}')
+            self.assertTrue(wait_for_message(self.listener), "The message was not delivered to the test listener")
             sleep(1)
-            self.listener.get_latest_message()
 
         count_message = Received.objects.all().count()
         self.assertEqual(1, count_message)
+        self.assertIn(
+            "Error while removing old messages, skipping cleanup this cycle", [r.getMessage() for r in log.records]
+        )
+        self.assertTrue(self.consumer._processing_event.is_set())
 
         mock_cache.get.assert_called_once_with(settings.OUTBOX_PATTERN_CONSUMER_CACHE_KEY)

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from django import db
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.db import OperationalError
 from django.utils import timezone
 from django.utils.module_loading import import_string
@@ -21,10 +22,27 @@ from django_outbox_pattern.payloads import Payload
 
 _logger = logging.getLogger("django_outbox_pattern")
 
+# Attributes every LogRecord already has: using one of them as an `extra` key makes logging raise KeyError.
+_RESERVED_LOG_RECORD_ATTRIBUTES = (
+    frozenset(logging.makeLogRecord({}).__dict__) | frozenset(dir(logging.LogRecord)) | {"message", "asctime"}
+)
+
+
+def _message_log_extra(message_id):
+    return {settings.DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY: message_id}
+
+
+def _validate_log_message_id_key(key):
+    if not isinstance(key, str) or not key or key in _RESERVED_LOG_RECORD_ATTRIBUTES:
+        raise ImproperlyConfigured(
+            "DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY must be a non-empty string that is not a LogRecord attribute, "
+            f"got {key!r}"
+        )
+
 
 def _get_msg_id(headers):
     """
-    Retrieves the first header value that matches either message-id, dop-msg-id or cap-msg-id.
+    Retrieves the first header value that matches cap-msg-id, dop-msg-id or message-id, in this order of precedence.
 
     These values are used to be added as the received message id, so we can track if the message was already received.
 
@@ -33,6 +51,20 @@ def _get_msg_id(headers):
     The dop-msg-id is a header that is used by the Django Outbox Pattern library, and it's used to identify the message.
     """
     return headers.get("cap-msg-id") or headers.get("dop-msg-id") or headers.get("message-id")
+
+
+def _parse_body(body, message_id):
+    """
+    Returns the decoded body, or the original body when it cannot be decoded.
+    """
+    if isinstance(body, (dict, list)):
+        return body
+    try:
+        return json.loads(body)
+    # log-score: ignore LOG-ERR-003 - the raw body is handed to the callback, which decides to save or nack it
+    except (ValueError, TypeError, RecursionError):
+        _logger.warning("Message body is not valid JSON", exc_info=True, extra=_message_log_extra(message_id))
+        return body
 
 
 def _get_or_create_correlation_id(headers: dict) -> str:
@@ -47,6 +79,7 @@ def _get_or_create_correlation_id(headers: dict) -> str:
 class Consumer(Base):
     def __init__(self, connection, username, passcode):
         super().__init__(connection, username, passcode)
+        _validate_log_message_id_key(settings.DEFAULT_CONSUMER_LOG_MESSAGE_ID_KEY)
         self.callback = lambda p: p
         self.destination = None
         self.queue_name = None
@@ -72,7 +105,10 @@ class Consumer(Base):
 
     def handle_incoming_message(self, body, headers):
         if self._shutting_down:
-            _logger.warning("Received message during shutdown, skipping (will be redelivered)")
+            _logger.warning(
+                "Received message during shutdown, skipping (will be redelivered)",
+                extra=_message_log_extra(_get_msg_id(headers)),
+            )
             return
         if self._should_process_msg_on_background:
             self._submit_task_to_worker_pool(body, headers)
@@ -84,42 +120,53 @@ class Consumer(Base):
             self._pool_executor.submit(self.message_handler, body, headers)
         except RuntimeError:
             if self._shutting_down:
-                _logger.warning("Worker pool was shutdown during graceful shutdown, discarding message")
+                _logger.warning(
+                    "Worker pool was shutdown during graceful shutdown, discarding message",
+                    extra=_message_log_extra(_get_msg_id(headers)),
+                )
                 return
-            _logger.warning("Worker pool was shutdown!")
+            _logger.warning("Worker pool was shutdown!", extra=_message_log_extra(_get_msg_id(headers)))
             self._pool_executor = self._create_new_worker_executor()
             self._pool_executor.submit(self.message_handler, body, headers)
 
     def message_handler(self, body, headers):
         self._processing_event.clear()
-        local_threading.request_id = _get_or_create_correlation_id(headers)
+        message_id = None
         try:
-            body = json.loads(body)
-        except json.JSONDecodeError as exc:
-            _logger.exception(exc)
+            local_threading.request_id = _get_or_create_correlation_id(headers)
+            message_id = _get_msg_id(headers)
+            # Tracing instrumentations wrap message_handler, so this record is emitted inside the message span.
+            _logger.info("Message received", extra=_message_log_extra(message_id))
+            body = _parse_body(body, message_id)
 
-        payload = Payload(self.connection, body, headers)
-        message_id = _get_msg_id(headers)
-
-        try:
+            payload = Payload(self.connection, body, headers)
             self._process_message_with_retry(payload, body, headers, message_id)
 
         finally:
             try:
-                self._remove_old_messages()
-            except OperationalError:
-                _logger.warning("OperationalError while removing old messages, skipping cleanup this cycle")
+                try:
+                    self._remove_old_messages()
+                # log-score: ignore LOG-ERR-003 - cleanup of old messages is best effort, processing already finished
+                except Exception as exc:
+                    # Database outages are expected and would log a traceback for every message, so only the
+                    # unexpected errors carry one.
+                    _logger.warning(
+                        "Error while removing old messages, skipping cleanup this cycle",
+                        exc_info=not isinstance(exc, OperationalError),
+                        extra=_message_log_extra(message_id),
+                    )
+                finally:
+                    db.close_old_connections()
             finally:
-                db.close_old_connections()
-            local_threading.request_id = None
-            self._processing_event.set()
+                local_threading.request_id = None
+                self._processing_event.set()
 
     def _process_message_with_retry(self, payload, body, headers, message_id, attempt=0):
         max_retries = settings.DEFAULT_CONSUMER_MAX_RETRY_ATTEMPTS
         try:
             if self.received_class.objects.filter(msg_id=message_id).exists():
                 db.close_old_connections()
-                _logger.info("Message with msg_id: %s already exists. discarding the message", message_id)
+                _logger.info("Message already exists, discarding the message", extra=_message_log_extra(message_id))
                 payload.ack()
                 return
 
@@ -132,19 +179,30 @@ class Consumer(Base):
             elif not payload.nacked:
                 _logger.warning(
                     "The save or nack command was not executed, and the routine finished running "
-                    "without receiving an acknowledgement or a negative acknowledgement. "
-                    "message-id: %s",
-                    message_id,
+                    "without receiving an acknowledgement or a negative acknowledgement",
+                    extra=_message_log_extra(message_id),
                 )
 
         except OperationalError:
             if attempt >= max_retries:
-                _logger.error("All %s retries exhausted, sending to DLQ, message-id: %s", max_retries, message_id)
+                # log-score: ignore JSM-LOG-014 - max_retries comes from settings and is not queried
+                _logger.error(
+                    "All %s retries exhausted, sending to DLQ",
+                    max_retries,
+                    extra=_message_log_extra(message_id),
+                )
                 payload.nack()
                 return
 
             wait_time = settings.DEFAULT_CONSUMER_RETRY_WAIT * (attempt + 1)
-            _logger.warning("Retry %s/%s failed, retrying in %ss", attempt + 1, max_retries, wait_time)
+            # log-score: ignore JSM-LOG-014 - retry counters and wait time come from settings and are not queried
+            _logger.warning(
+                "Retry %s/%s failed, retrying in %ss",
+                attempt + 1,
+                max_retries,
+                wait_time,
+                extra=_message_log_extra(message_id),
+            )
             db.close_old_connections()
             time.sleep(wait_time)
             retry_payload = Payload(self.connection, body, headers)
